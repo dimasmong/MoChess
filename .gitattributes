@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.glb binary
+*.png binary
+*.jpg binary
+docs/** linguist-documentation
+public/models/** linguist-generated=true

@@ -1,0 +1,34 @@
+{
+  "name": "mochess-arcane-kingdom",
+  "version": "0.1.0-preview",
+  "private": true,
+  "description": "MoChess — Arcane Kingdom is a cinematic 3D fantasy chess game featuring animated characters, magical battles, multiple fantasy arenas, and immersive gameplay. Built with Three.js, TypeScript, and Blender.",
+  "author": "Dimas Mong (https://github.com/dimasmong)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimasmong/MoChess.git"
+  },
+  "homepage": "https://github.com/dimasmong/MoChess",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/generate_glb_assets.mjs && tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate:assets": "node scripts/generate_glb_assets.mjs"
+  },
+  "dependencies": {
+    "chess.js": "^1.0.0-beta.8",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.64.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.5"
+  }
+}

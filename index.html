@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0c0907" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%2316120e' stroke='%23e6b44c' stroke-width='2'/%3E%3Cpath d='M16 6l3 6 6 1-4 4 1 6-6-3-6 3 1-6-4-4 6-1z' fill='%23e6b44c'/%3E%3C/svg%3E" />
+    <title>Wizard Chess — MoChess: Arcane Kingdom</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <!-- 3D Three.js Canvas Mount -->
+      <div id="canvas-container" aria-label="3D Wizard Chess Arena"></div>
+
+      <!-- Full-Screen Front-End Main Menu Overlay -->
+      <section class="main-menu-overlay hidden" id="main-menu-screen" aria-label="Main Menu">
+        <div class="main-menu-vignette"></div>
+        <div class="main-menu-panel">
+          <div class="main-menu-crest">♔</div>
+          <h1 class="main-menu-title" id="menu-title">WIZARD CHESS</h1>
+          <p class="main-menu-subtitle" id="menu-subtitle">MOCHESS — ARCANE KINGDOM</p>
+          <p class="main-menu-tagline" id="menu-tagline">
+            Command living stone-and-gold armies across ancient medieval battle halls.
+          </p>
+
+          <div class="main-menu-actions">
+            <button type="button" class="menu-primary-btn" id="btn-menu-play">Play</button>
+            <button type="button" class="menu-secondary-btn" id="btn-menu-maps">Map Selection</button>
+            <button type="button" class="menu-secondary-btn" id="btn-menu-settings">Settings</button>
+            <div class="menu-row-split">
+              <button type="button" class="menu-secondary-btn" id="btn-menu-lang">Language: EN</button>
+              <button type="button" class="menu-secondary-btn" id="btn-menu-credits">Credits</button>
+            </div>
+          </div>
+
+          <div class="main-menu-footer" id="menu-dev-footer">
+            <div class="menu-footer-row">
+              <span class="menu-footer-sig" id="menu-footer-signature">Crafted with ❤️ by Dimas Mong</span>
+              <span class="hud-divider"></span>
+              <a
+                href="https://github.com/dimasmong"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="github-profile-link"
+                id="menu-github-link"
+                aria-label="Dimas Mong on GitHub"
+              >
+                <svg class="github-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                  />
+                </svg>
+                <span>@dimasmong</span>
+              </a>
+            </div>
+            <p class="menu-footer-copy" id="menu-footer-copyright">© 2026 Dimas Mong. Licensed under the MIT License.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Opening Cinematic Camera Skip Banner -->
+      <div class="cinematic-skip-bar hidden" id="cinematic-skip-bar">
+        <span class="cinematic-label" id="cinematic-map-label">Gothic Cathedral</span>
+        <button type="button" class="hud-btn hud-btn-gold" id="btn-skip-intro">Skip Intro</button>
+      </div>
+
+      <!-- Minimal Cinematic In-Game HUD Overlay -->
+      <header class="hud-top-bar" id="hud-top-bar" role="banner">
+        <!-- Top-Left Status Pill -->
+        <div class="hud-pill hud-status-pill" id="hud-status-pill">
+          <span class="brand-title" id="hud-brand-title">WIZARD CHESS</span>
+          <span class="hud-divider"></span>
+          <span class="turn-indicator" id="turn-indicator">
+            <span class="turn-dot white" id="turn-dot"></span>
+            <span id="turn-text">White to Move</span>
+          </span>
+          <span class="mode-badge" id="mode-badge">Single Player • You: White</span>
+          <span class="map-badge" id="map-badge">Gothic Cathedral</span>
+          <span class="clock-badge hidden" id="clock-badge" aria-label="Chess Clocks">10:00 | 10:00</span>
+        </div>
+
+        <!-- Top-Right Action Bar -->
+        <nav class="hud-pill hud-actions-pill" aria-label="Game Controls">
+          <button type="button" class="hud-btn" id="btn-main-menu" title="Open Main Menu">
+            Main Menu
+          </button>
+          <button type="button" class="hud-btn" id="btn-lobby" title="Open Match Setup & Lobby">
+            Lobby
+          </button>
+          <button type="button" class="hud-btn" id="btn-maps" title="Switch 3D Arena Map">
+            Maps
+          </button>
+          <button type="button" class="hud-btn" id="btn-switch-side" title="Switch Side (Play as Black or White)">
+            Play as Black
+          </button>
+          <button type="button" class="hud-btn" id="btn-ai-move" title="Trigger AI Move Now">
+            AI Move
+          </button>
+          <span class="hud-divider"></span>
+          <button type="button" class="hud-btn hud-btn-gold" id="btn-new-game" title="Start a New Game">
+            New Game
+          </button>
+        </nav>
+      </header>
+
+      <!-- Subtle Bottom-Center Info & Tactical Bar -->
+      <footer class="hud-bottom-bar" id="hud-bottom-bar" role="contentinfo">
+        <div class="hud-pill hud-bottom-pill">
+          <span class="hint-text" id="hud-hint-text">
+            Select a piece to view legal moves • Scroll to zoom • Subtle drag to tilt
+          </span>
+          <span class="captured-summary" id="captured-summary"></span>
+          <span class="hud-divider"></span>
+          <div class="bottom-quick-actions">
+            <button type="button" class="hud-micro-btn" id="btn-undo" title="Undo Move">Undo</button>
+            <button type="button" class="hud-micro-btn" id="btn-restart" title="Restart Current Match">Restart</button>
+            <button type="button" class="hud-micro-btn" id="btn-camera" title="Cycle Camera View (Gameplay, Overhead, Cinematic)">
+              View: Gameplay
+            </button>
+            <button type="button" class="hud-micro-btn" id="btn-history" title="Toggle Move History & Captured Tray">
+              History
+            </button>
+            <button type="button" class="hud-micro-btn" id="btn-settings" title="Graphics, Audio, Camera & Language Settings">
+              Settings
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      <!-- Collapsible Move History & Captured Pieces Drawer -->
+      <aside class="side-drawer hidden" id="history-drawer" aria-label="Move History and Captured Pieces">
+        <div class="drawer-header">
+          <h3 id="history-title">Chronicle of Moves</h3>
+          <button type="button" class="drawer-close-btn" id="btn-close-history" aria-label="Close History">×</button>
+        </div>
+        <div class="captured-tray-section">
+          <div class="captured-row">
+            <span class="captured-label" id="label-white-captured">White Captured:</span>
+            <span class="captured-icons" id="captured-by-white">—</span>
+          </div>
+          <div class="captured-row">
+            <span class="captured-label" id="label-black-captured">Black Captured:</span>
+            <span class="captured-icons" id="captured-by-black">—</span>
+          </div>
+        </div>
+        <div class="move-list-container" id="move-list">
+          <div class="empty-history" id="empty-history-text">No moves played yet.</div>
+        </div>
+      </aside>
+
+      <!-- Dedicated Map Selection Modal -->
+      <div class="modal-backdrop hidden" id="map-select-modal" role="dialog" aria-modal="true" aria-labelledby="map-modal-title">
+        <div class="modal-card modal-card-wide">
+          <div class="modal-header">
+            <div>
+              <h2 id="map-modal-title">Select Battle Arena</h2>
+              <p class="modal-subtext" id="map-modal-subtitle">
+                Choose a 3D realm with its own architecture, lighting mood, and board craftsmanship.
+              </p>
+            </div>
+            <button type="button" class="modal-close" id="btn-close-maps" aria-label="Close Map Selection">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="map-cards-grid" id="map-cards-grid">
+              <!-- Map 1: Gothic Cathedral -->
+              <button type="button" class="map-card active" data-map="cathedral" id="card-map-cathedral">
+                <div class="map-card-preview preview-cathedral">
+                  <span class="map-card-tag">I</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="map-title-cathedral">Gothic Cathedral</h3>
+                  <p class="map-card-desc" id="map-desc-cathedral">
+                    Ancient vaulted limestone nave illuminated by roaring wrought-iron fire braziers and stained glass.
+                  </p>
+                </div>
+              </button>
+
+              <!-- Map 2: Royal War Hall -->
+              <button type="button" class="map-card" data-map="warhall" id="card-map-warhall">
+                <div class="map-card-preview preview-warhall">
+                  <span class="map-card-tag">II</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="map-title-warhall">Royal War Hall</h3>
+                  <p class="map-card-desc" id="map-desc-warhall">
+                    Fortified crimson-and-gold throne bastion with royal banners, dark granite pillars, and hearth firelight.
+                  </p>
+                </div>
+              </button>
+
+              <!-- Map 3: Arcane Sanctum -->
+              <button type="button" class="map-card" data-map="sanctum" id="card-map-sanctum">
+                <div class="map-card-preview preview-sanctum">
+                  <span class="map-card-tag">III</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="map-title-sanctum">Arcane Sanctum</h3>
+                  <p class="map-card-desc" id="map-desc-sanctum">
+                    Deep obsidian chamber encircled by levitating mana crystals, glowing ley-line runes, and mystic blue flames.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-maps-confirm">Select Arena</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lobby & Match Configuration Modal -->
+      <div class="modal-backdrop hidden" id="lobby-modal" role="dialog" aria-modal="true" aria-labelledby="lobby-title">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2 id="lobby-title">Match Setup — Sanctum Lobby</h2>
+            <button type="button" class="modal-close" id="btn-close-lobby" aria-label="Close Lobby">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label id="label-game-mode">Game Mode</label>
+              <div class="segmented-control" id="select-mode">
+                <button type="button" class="seg-btn active" data-mode="ai" id="btn-mode-ai">Single Player (vs AI)</button>
+                <button type="button" class="seg-btn" data-mode="local" id="btn-mode-local">Two Player (Pass &amp; Play)</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-your-faction">Your Faction</label>
+              <div class="segmented-control" id="select-color">
+                <button type="button" class="seg-btn active" data-color="w" id="btn-color-w">White &amp; Gold</button>
+                <button type="button" class="seg-btn" data-color="b" id="btn-color-b">Black &amp; Gold</button>
+              </div>
+            </div>
+
+            <div class="form-group" id="group-difficulty">
+              <label id="label-ai-rank">AI Opponent Rank</label>
+              <div class="segmented-control" id="select-difficulty">
+                <button type="button" class="seg-btn" data-diff="novice" id="btn-diff-novice">Novice</button>
+                <button type="button" class="seg-btn active" data-diff="knight" id="btn-diff-knight">Knight</button>
+                <button type="button" class="seg-btn" data-diff="archmage" id="btn-diff-archmage">Archmage</button>
+                <button type="button" class="seg-btn" data-diff="grandmaster" id="btn-diff-grandmaster">Grandmaster</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-time-control">Time Control</label>
+              <div class="segmented-control" id="select-clock">
+                <button type="button" class="seg-btn active" data-clock="0" id="btn-clock-0">Unlimited</button>
+                <button type="button" class="seg-btn" data-clock="3" id="btn-clock-3">3m Blitz</button>
+                <button type="button" class="seg-btn" data-clock="5" id="btn-clock-5">5m Blitz</button>
+                <button type="button" class="seg-btn" data-clock="10" id="btn-clock-10">10m Rapid</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-arena-map">Battle Arena (Map)</label>
+              <div class="segmented-control" id="select-lobby-map">
+                <button type="button" class="seg-btn active" data-map="cathedral" id="btn-lobby-map-cathedral">Gothic Cathedral</button>
+                <button type="button" class="seg-btn" data-map="warhall" id="btn-lobby-map-warhall">Royal War Hall</button>
+                <button type="button" class="seg-btn" data-map="sanctum" id="btn-lobby-map-sanctum">Arcane Sanctum</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-camera-preset">Camera Perspective</label>
+              <div class="segmented-control" id="select-camera-preset">
+                <button type="button" class="seg-btn active" data-cam="gameplay" id="btn-cam-gameplay">Strategic Top-Down</button>
+                <button type="button" class="seg-btn" data-cam="top" id="btn-cam-top">Direct Overhead</button>
+                <button type="button" class="seg-btn" data-cam="cinematic" id="btn-cam-cinematic">3/4 Showcase</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="hud-btn" id="btn-lobby-mainmenu">Main Menu</button>
+            <button type="button" class="hud-btn" id="btn-lobby-resume">Resume Match</button>
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-lobby-start">Start Match</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Modal -->
+      <div class="modal-backdrop hidden" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2 id="settings-title">Settings &amp; Configuration</h2>
+            <button type="button" class="modal-close" id="btn-close-settings" aria-label="Close Settings">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label id="label-setting-lang">Language / Bahasa</label>
+              <div class="segmented-control" id="select-language">
+                <button type="button" class="seg-btn active" data-lang="en">English</button>
+                <button type="button" class="seg-btn" data-lang="id">Bahasa Indonesia</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-setting-quality">Graphics Quality</label>
+              <div class="segmented-control" id="select-quality">
+                <button type="button" class="seg-btn" data-quality="low" id="btn-quality-low">Low</button>
+                <button type="button" class="seg-btn" data-quality="medium" id="btn-quality-medium">Medium</button>
+                <button type="button" class="seg-btn active" data-quality="high" id="btn-quality-high">High</button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-volume">Master Audio Volume</span>
+              <input type="range" id="slider-volume" min="0" max="100" value="80" class="setting-slider" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-music">Ambient Cathedral Music</span>
+              <input type="checkbox" id="toggle-music" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-sfx">Battle Sound Effects (SFX)</span>
+              <input type="checkbox" id="toggle-sound" checked />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-camsens">Camera &amp; Zoom Sensitivity</span>
+              <input type="range" id="slider-cam-sens" min="40" max="180" value="100" class="setting-slider" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-fx">Combat FX &amp; Fire Particles</span>
+              <input type="checkbox" id="toggle-fx" checked />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-motion">Reduced Motion (Instant Camera &amp; Moves)</span>
+              <input type="checkbox" id="toggle-reduced-motion" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-coords">Show Board Coordinates (A–H, 1–8)</span>
+              <input type="checkbox" id="toggle-coords" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-settings-done">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credits Modal -->
+      <div class="modal-backdrop hidden" id="credits-modal" role="dialog" aria-modal="true" aria-labelledby="credits-title">
+        <div class="modal-card credits-card">
+          <div class="modal-header">
+            <h2 id="credits-title">Credits — MoChess: Arcane Kingdom</h2>
+            <button type="button" class="modal-close" id="btn-close-credits" aria-label="Close Credits">×</button>
+          </div>
+          <div class="modal-body credits-body-layout">
+            <div class="credits-creator-box">
+              <span class="credits-label-pill" id="credits-creator-label">Creator &amp; Lead Developer</span>
+              <h3 class="credits-creator-name">Dimas Mong</h3>
+              <p class="credits-creator-role" id="credits-creator-role">
+                Game Design • 3D Architecture • Systems Engineering
+              </p>
+              <a
+                href="https://github.com/dimasmong"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="credits-github-btn"
+                id="credits-github-link"
+              >
+                <svg class="github-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+                  />
+                </svg>
+                <span id="credits-github-text">github.com/dimasmong</span>
+              </a>
+            </div>
+
+            <p class="credits-paragraph" id="credits-body">
+              Original 3D sculpted fantasy chess experience built with Three.js, TypeScript, Blender procedural asset pipeline, 2K PBR textures, role-specific battle animations, and an authoritative chess.js + Web Worker AI engine.
+            </p>
+
+            <div class="credits-tech-section">
+              <h4 class="credits-tech-heading" id="credits-tech-title">Open-Source Attribution &amp; Stack</h4>
+              <div class="credits-tech-badges">
+                <span class="tech-pill">Three.js (MIT)</span>
+                <span class="tech-pill">TypeScript (Apache-2.0)</span>
+                <span class="tech-pill">chess.js (BSD-2-Clause)</span>
+                <span class="tech-pill">Vite (MIT)</span>
+                <span class="tech-pill">Blender 3D Pipeline</span>
+                <span class="tech-pill">WebGL 2.0 / PBR</span>
+              </div>
+              <p class="credits-license-note" id="credits-license-notice">
+                Powered by Three.js (MIT), chess.js (BSD-2-Clause), TypeScript (Apache-2.0), Vite (MIT), and Blender 3D Pipeline.
+              </p>
+            </div>
+
+            <div class="credits-signature-block">
+              <p class="credits-sig-line" id="credits-signature">Crafted with ❤️ by Dimas Mong</p>
+              <p class="credits-copy-line" id="credits-copyright">© 2026 Dimas Mong. Licensed under the MIT License.</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-credits-close">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pawn Promotion Picker Modal -->
+      <div class="modal-backdrop hidden" id="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+        <div class="modal-card promo-card">
+          <div class="modal-header">
+            <h2 id="promo-title">Ascension — Choose Promotion Piece</h2>
+          </div>
+          <div class="promo-grid">
+            <button type="button" class="promo-btn" data-promo="q">
+              <span class="promo-title-text" id="promo-name-q">Queen</span>
+              <span class="promo-sub" id="promo-sub-q">Royal Sovereign</span>
+            </button>
+            <button type="button" class="promo-btn" data-promo="r">
+              <span class="promo-title-text" id="promo-name-r">Rook</span>
+              <span class="promo-sub" id="promo-sub-r">Citadel Keep</span>
+            </button>
+            <button type="button" class="promo-btn" data-promo="b">
+              <span class="promo-title-text" id="promo-name-b">Bishop</span>
+              <span class="promo-sub" id="promo-sub-b">Cathedral Prelate</span>
+            </button>
+            <button type="button" class="promo-btn" data-promo="n">
+              <span class="promo-title-text" id="promo-name-n">Knight</span>
+              <span class="promo-sub" id="promo-sub-n">Crusader Destrier</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checkmate / Game Over Result Overlay Modal -->
+      <div class="modal-backdrop hidden" id="gameover-modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+        <div class="modal-card gameover-card">
+          <div class="gameover-crest">♔</div>
+          <h2 class="gameover-banner-title" id="gameover-title">CHECKMATE</h2>
+          <div class="gameover-winner-pill" id="gameover-winner-pill">White Wins</div>
+          <p class="gameover-subtitle" id="gameover-subtitle">
+            The White &amp; Gold Army triumphs in the Sanctum!
+          </p>
+          <div class="gameover-actions">
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-gameover-rematch">Rematch</button>
+            <button type="button" class="hud-btn" id="btn-gameover-new">New Game</button>
+            <button type="button" class="hud-btn" id="btn-gameover-lobby">Return to Lobby</button>
+            <button type="button" class="hud-btn" id="btn-gameover-review">Review Board</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
