@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { Color, MapId, PieceSymbol, Square } from '../engine/types';
+import type { Color, MapId, PieceSkinId, PieceSymbol, Square } from '../engine/types';
 import { getPieceGeometryParts, type PieceMeshParts } from './PieceGeometryBuilder';
 import { createMarbleTextures, getAdaptiveTextureSize, type QualityTier } from './ProceduralTextures';
 
@@ -29,8 +29,14 @@ export class PieceAssetManager {
   private idleClip: THREE.AnimationClip;
   private attackClip: THREE.AnimationClip;
   private texSize: number;
+  private quality: QualityTier;
+  private isMobile: boolean;
+  private currentMap: MapId = 'cathedral';
+  private currentSkin: PieceSkinId = 'arcane_royalty';
 
   constructor(quality: QualityTier = 'high', isMobile = false) {
+    this.quality = quality;
+    this.isMobile = isMobile;
     this.texSize = getAdaptiveTextureSize(quality, isMobile);
     const whiteMarble = createMarbleTextures('white', Math.min(512, this.texSize), 'cathedral');
     const blackMarble = createMarbleTextures('black', Math.min(512, this.texSize), 'cathedral');
@@ -109,12 +115,121 @@ export class PieceAssetManager {
 
     this.idleClip = this.createIdleAnimationClip();
     this.attackClip = this.createAttackAnimationClip();
+    this.syncMaterialQualityAndSkin();
+  }
+
+  public getSkin(): PieceSkinId {
+    return this.currentSkin;
+  }
+
+  public setSkin(skinId: PieceSkinId): void {
+    this.currentSkin = skinId;
+    this.syncMaterialQualityAndSkin();
+  }
+
+  public setQuality(quality: QualityTier): void {
+    this.quality = quality;
+    this.texSize = getAdaptiveTextureSize(quality, this.isMobile);
+    this.syncMaterialQualityAndSkin();
+  }
+
+  private syncMaterialQualityAndSkin(): void {
+    const isLow = this.quality === 'low';
+    const isMed = this.quality === 'medium';
+
+    // Skin-specific tint nuances while preserving clear White vs Black readability
+    if (this.currentSkin === 'runic_warforged') {
+      this.materials.w.body.color.set('#e3dfd7');
+      this.materials.w.gold.color.set('#df9b2e');
+      this.materials.w.steel.color.set('#b4c0cc');
+      this.materials.b.body.color.set('#161920');
+      this.materials.b.gold.color.set('#e69f2c');
+      this.materials.b.steel.color.set('#8f9aa8');
+    } else if (this.currentSkin === 'mystic_sanctum') {
+      this.materials.w.body.color.set('#edf2fc');
+      this.materials.w.gold.color.set('#f5cb5c');
+      this.materials.w.steel.color.set('#5ce1ff');
+      this.materials.b.body.color.set('#111326');
+      this.materials.b.gold.color.set('#f0c24b');
+      this.materials.b.steel.color.set('#44d2ff');
+    } else {
+      // arcane_royalty
+      if (this.currentMap === 'warhall') {
+        this.materials.w.body.color.set('#eadbc4');
+        this.materials.w.gold.color.set('#df9d2e');
+        this.materials.b.body.color.set('#1a1412');
+        this.materials.b.gold.color.set('#e5a232');
+      } else if (this.currentMap === 'sanctum') {
+        this.materials.w.body.color.set('#e4ecf8');
+        this.materials.w.gold.color.set('#f4c855');
+        this.materials.b.body.color.set('#101322');
+        this.materials.b.gold.color.set('#eab844');
+      } else {
+        this.materials.w.body.color.set('#efe7d8');
+        this.materials.w.gold.color.set('#ebb138');
+        this.materials.b.body.color.set('#13161d');
+        this.materials.b.gold.color.set('#f0b436');
+      }
+      this.materials.w.steel.color.set('#c8d0d8');
+      this.materials.b.steel.color.set('#bfc7d0');
+    }
+
+    if (isLow) {
+      // True Low Graphics Mode: flat, matte, zero clearcoat, zero environment reflection complexity
+      for (const c of ['w', 'b'] as const) {
+        this.materials[c].body.roughness = 0.88;
+        this.materials[c].body.metalness = 0.04;
+        this.materials[c].body.clearcoat = 0.0;
+        this.materials[c].body.envMapIntensity = 0.0;
+        this.materials[c].gold.roughness = 0.56;
+        this.materials[c].gold.metalness = 0.42;
+        this.materials[c].gold.envMapIntensity = 0.0;
+        this.materials[c].steel.roughness = 0.58;
+        this.materials[c].steel.metalness = 0.38;
+        this.materials[c].steel.envMapIntensity = 0.0;
+        this.materials[c].face.envMapIntensity = 0.0;
+      }
+    } else if (isMed) {
+      for (const c of ['w', 'b'] as const) {
+        this.materials[c].body.roughness = 0.34;
+        this.materials[c].body.metalness = c === 'w' ? 0.04 : 0.16;
+        this.materials[c].body.clearcoat = 0.12;
+        this.materials[c].body.envMapIntensity = 0.22;
+        this.materials[c].gold.roughness = 0.28;
+        this.materials[c].gold.metalness = 0.85;
+        this.materials[c].gold.envMapIntensity = 0.24;
+        this.materials[c].steel.roughness = 0.30;
+        this.materials[c].steel.metalness = 0.80;
+        this.materials[c].steel.envMapIntensity = 0.22;
+      }
+    } else {
+      // High Graphics Mode
+      for (const c of ['w', 'b'] as const) {
+        this.materials[c].body.roughness = 0.24;
+        this.materials[c].body.metalness = c === 'w' ? 0.04 : 0.22;
+        this.materials[c].body.clearcoat = c === 'w' ? 0.28 : 0.34;
+        this.materials[c].body.envMapIntensity = 0.38;
+        this.materials[c].gold.roughness = 0.20;
+        this.materials[c].gold.metalness = 0.92;
+        this.materials[c].gold.envMapIntensity = 0.42;
+        this.materials[c].steel.roughness = 0.22;
+        this.materials[c].steel.metalness = 0.88;
+        this.materials[c].steel.envMapIntensity = 0.38;
+      }
+    }
+
+    for (const c of ['w', 'b'] as const) {
+      this.materials[c].body.needsUpdate = true;
+      this.materials[c].gold.needsUpdate = true;
+      this.materials[c].steel.needsUpdate = true;
+    }
   }
 
   /**
    * Updates piece faction materials to complement the active map's palette and lighting mood.
    */
   public applyMapTheme(mapId: MapId): void {
+    this.currentMap = mapId;
     const res = Math.min(512, this.texSize);
     const whiteMarble = createMarbleTextures('white', res, mapId);
     const blackMarble = createMarbleTextures('black', res, mapId);
@@ -124,27 +239,7 @@ export class PieceAssetManager {
     this.materials.b.body.map = blackMarble.map;
     this.materials.b.body.roughnessMap = blackMarble.roughnessMap;
 
-    if (mapId === 'cathedral') {
-      this.materials.w.body.color.set('#efe7d8');
-      this.materials.w.gold.color.set('#ebb138');
-      this.materials.b.body.color.set('#13161d');
-      this.materials.b.gold.color.set('#f0b436');
-    } else if (mapId === 'warhall') {
-      // Warm champagne travertine & blackened iron-bronze with burnished brass-gold
-      this.materials.w.body.color.set('#eadbc4');
-      this.materials.w.gold.color.set('#df9d2e');
-      this.materials.b.body.color.set('#1a1412');
-      this.materials.b.gold.color.set('#e5a232');
-    } else if (mapId === 'sanctum') {
-      // Moonlight silver-alabaster & deep astral obsidian with celestial gold
-      this.materials.w.body.color.set('#e4ecf8');
-      this.materials.w.gold.color.set('#f4c855');
-      this.materials.b.body.color.set('#101322');
-      this.materials.b.gold.color.set('#eab844');
-    }
-
-    this.materials.w.body.needsUpdate = true;
-    this.materials.b.body.needsUpdate = true;
+    this.syncMaterialQualityAndSkin();
   }
 
   private createIdleAnimationClip(): THREE.AnimationClip {
@@ -246,8 +341,11 @@ export class PieceAssetManager {
     const root = new THREE.Group();
     root.name = `piece_${color}_${type}_${square}`;
 
-    const highParts = this.glbParts.get(type) ?? getPieceGeometryParts(type, 'high');
-    const lowParts = getPieceGeometryParts(type, 'low');
+    const useGlb = this.currentSkin === 'arcane_royalty' && this.glbParts.has(type);
+    const highParts = useGlb
+      ? this.glbParts.get(type)!
+      : getPieceGeometryParts(type, 'high', this.currentSkin);
+    const lowParts = getPieceGeometryParts(type, 'low', this.currentSkin);
     const matSet = this.materials[color];
 
     // Inner rig group driven by THREE.AnimationMixer & combat articulation so root position/yaw remain cleanly controlled by board coordinates
@@ -257,11 +355,17 @@ export class PieceAssetManager {
     const lod = new THREE.LOD();
     lod.name = 'piece_lod';
 
-    const highGroup = this.buildMeshGroup(highParts, matSet, castShadows, 'lod0');
-    const lowGroup = this.buildMeshGroup(lowParts, matSet, false, 'lod1');
+    if (this.quality === 'low') {
+      // In Low Graphics Mode, exclusively use the lightweight low-segment mesh at all distances with shadows off
+      const lowGroup = this.buildMeshGroup(lowParts, matSet, false, 'lod1');
+      lod.addLevel(lowGroup, 0);
+    } else {
+      const highGroup = this.buildMeshGroup(highParts, matSet, castShadows, 'lod0');
+      const lowGroup = this.buildMeshGroup(lowParts, matSet, false, 'lod1');
+      lod.addLevel(highGroup, 0);
+      lod.addLevel(lowGroup, 22);
+    }
 
-    lod.addLevel(highGroup, 0);
-    lod.addLevel(lowGroup, 22);
     rigGroup.add(lod);
     root.add(rigGroup);
 

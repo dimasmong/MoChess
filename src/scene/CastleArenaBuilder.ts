@@ -69,37 +69,39 @@ export function buildCastleArena(
   const floorTint =
     mapId === 'warhall' ? '#c8b2a2' : mapId === 'sanctum' ? '#a8b6dc' : '#cfc0b0';
 
+  const isLow = quality === 'low';
+
   const wallMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(wallTint),
     map: masonry.map,
-    bumpMap: masonry.bumpMap,
-    bumpScale: 0.032,
-    roughness: 0.82,
-    metalness: 0.06
+    bumpMap: isLow ? null : masonry.bumpMap,
+    bumpScale: isLow ? 0 : 0.032,
+    roughness: isLow ? 0.95 : 0.82,
+    metalness: isLow ? 0.0 : 0.06
   });
 
   const columnMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(colTint),
     map: columnMasonry.map,
-    bumpMap: columnMasonry.bumpMap,
-    bumpScale: 0.028,
-    roughness: 0.78,
-    metalness: 0.08
+    bumpMap: isLow ? null : columnMasonry.bumpMap,
+    bumpScale: isLow ? 0 : 0.028,
+    roughness: isLow ? 0.94 : 0.78,
+    metalness: isLow ? 0.0 : 0.08
   });
 
   const trimStoneMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(trimTint),
-    roughness: 0.74,
-    metalness: 0.10
+    roughness: isLow ? 0.92 : 0.74,
+    metalness: isLow ? 0.0 : 0.10
   });
 
   const floorMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(floorTint),
     map: floorTex,
-    bumpMap: floorTex,
-    bumpScale: 0.018,
-    roughness: 0.72,
-    metalness: 0.08
+    bumpMap: isLow ? null : floorTex,
+    bumpScale: isLow ? 0 : 0.018,
+    roughness: isLow ? 0.94 : 0.72,
+    metalness: isLow ? 0.0 : 0.08
   });
 
   const darkTimberMat = new THREE.MeshStandardMaterial({
@@ -339,11 +341,13 @@ export function buildCastleArena(
     core.receiveShadow = true;
     colGroup.add(core);
 
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI * 2) / 8;
-      const subShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 13.5, 10), columnMat);
-      subShaft.position.set(Math.cos(a) * 0.86, 7.4, Math.sin(a) * 0.86);
-      colGroup.add(subShaft);
+    if (!isLow) {
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI * 2) / 8;
+        const subShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 13.5, 10), columnMat);
+        subShaft.position.set(Math.cos(a) * 0.86, 7.4, Math.sin(a) * 0.86);
+        colGroup.add(subShaft);
+      }
     }
 
     for (const bandY of [4.2, 8.2]) {

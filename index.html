@@ -31,8 +31,19 @@
 
           <div class="main-menu-actions">
             <button type="button" class="menu-primary-btn" id="btn-menu-play">Play</button>
-            <button type="button" class="menu-secondary-btn" id="btn-menu-maps">Map Selection</button>
-            <button type="button" class="menu-secondary-btn" id="btn-menu-settings">Settings</button>
+            <button type="button" class="menu-secondary-btn menu-online-btn" id="btn-menu-online">Online PvP</button>
+            <div class="menu-row-split">
+              <button type="button" class="menu-secondary-btn" id="btn-menu-maps">Map Selection</button>
+              <button type="button" class="menu-secondary-btn" id="btn-menu-settings">Settings</button>
+            </div>
+            <div class="menu-skin-selector" aria-label="Chess Piece Skin">
+              <span class="menu-skin-label" id="label-menu-skin">Chess Piece Skin (3D Sculpted Set)</span>
+              <div class="segmented-control" id="select-menu-skin">
+                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-menu-skin-royalty">Arcane Royalty</button>
+                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-menu-skin-warforged">Runic Warforged</button>
+                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-menu-skin-sanctum">Mystic Sanctum</button>
+              </div>
+            </div>
             <div class="menu-row-split">
               <button type="button" class="menu-secondary-btn" id="btn-menu-lang">Language: EN</button>
               <button type="button" class="menu-secondary-btn" id="btn-menu-credits">Credits</button>
@@ -82,6 +93,7 @@
             <span id="turn-text">White to Move</span>
           </span>
           <span class="mode-badge" id="mode-badge">Single Player • You: White</span>
+          <span class="online-hud-badge hidden" id="online-hud-badge">Room ------ • Connected</span>
           <span class="map-badge" id="map-badge">Gothic Cathedral</span>
           <span class="clock-badge hidden" id="clock-badge" aria-label="Chess Clocks">10:00 | 10:00</span>
         </div>
@@ -94,6 +106,9 @@
           <button type="button" class="hud-btn" id="btn-lobby" title="Open Match Setup & Lobby">
             Lobby
           </button>
+          <button type="button" class="hud-btn" id="btn-online-room" title="Online Private PvP Room">
+            Online PvP
+          </button>
           <button type="button" class="hud-btn" id="btn-maps" title="Switch 3D Arena Map">
             Maps
           </button>
@@ -102,6 +117,9 @@
           </button>
           <button type="button" class="hud-btn" id="btn-ai-move" title="Trigger AI Move Now">
             AI Move
+          </button>
+          <button type="button" class="hud-btn hidden" id="btn-resign" title="Resign Online Match">
+            Resign
           </button>
           <span class="hud-divider"></span>
           <button type="button" class="hud-btn hud-btn-gold" id="btn-new-game" title="Start a New Game">
@@ -228,6 +246,7 @@
               <div class="segmented-control" id="select-mode">
                 <button type="button" class="seg-btn active" data-mode="ai" id="btn-mode-ai">Single Player (vs AI)</button>
                 <button type="button" class="seg-btn" data-mode="local" id="btn-mode-local">Two Player (Pass &amp; Play)</button>
+                <button type="button" class="seg-btn" data-mode="online" id="btn-mode-online">Online PvP</button>
               </div>
             </div>
 
@@ -265,6 +284,15 @@
                 <button type="button" class="seg-btn active" data-map="cathedral" id="btn-lobby-map-cathedral">Gothic Cathedral</button>
                 <button type="button" class="seg-btn" data-map="warhall" id="btn-lobby-map-warhall">Royal War Hall</button>
                 <button type="button" class="seg-btn" data-map="sanctum" id="btn-lobby-map-sanctum">Arcane Sanctum</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label id="label-lobby-skin">Chess Piece Skin (3D Sculpted Set)</label>
+              <div class="segmented-control" id="select-lobby-skin">
+                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-lobby-skin-royalty">Arcane Royalty</button>
+                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-lobby-skin-warforged">Runic Warforged</button>
+                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-lobby-skin-sanctum">Mystic Sanctum</button>
               </div>
             </div>
 
@@ -310,14 +338,23 @@
               </div>
             </div>
 
+            <div class="form-group">
+              <label id="label-setting-skin">Chess Piece Skin (3D Sculpted Set)</label>
+              <div class="segmented-control" id="select-setting-skin">
+                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-setting-skin-royalty">Arcane Royalty</button>
+                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-setting-skin-warforged">Runic Warforged</button>
+                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-setting-skin-sanctum">Mystic Sanctum</button>
+              </div>
+            </div>
+
             <div class="setting-row">
               <span id="label-setting-volume">Master Audio Volume</span>
               <input type="range" id="slider-volume" min="0" max="100" value="80" class="setting-slider" />
             </div>
 
             <div class="setting-row">
-              <span id="label-setting-music">Ambient Cathedral Music</span>
-              <input type="checkbox" id="toggle-music" />
+              <span id="label-setting-music">Map Background Music</span>
+              <input type="checkbox" id="toggle-music" checked />
             </div>
 
             <div class="setting-row">
@@ -412,6 +449,142 @@
         </div>
       </div>
 
+      <!-- Online Private PvP Modal (Create / Join / Waiting Room) -->
+      <div class="modal-backdrop hidden" id="online-modal" role="dialog" aria-modal="true" aria-labelledby="online-modal-title">
+        <div class="modal-card online-modal-card">
+          <div class="modal-header">
+            <div>
+              <h2 id="online-modal-title">Online Private PvP — Arcane Sanctuary</h2>
+              <p class="modal-subtext" id="online-modal-subtitle">
+                Create a private 1v1 battle room or join a friend via room code or invite link.
+              </p>
+            </div>
+            <button type="button" class="modal-close" id="btn-close-online" aria-label="Close Online PvP">×</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="online-error-banner hidden" id="online-error-banner" role="alert"></div>
+
+            <!-- View 1: Create or Join Setup -->
+            <div id="online-setup-view">
+              <div class="segmented-control online-tabs" id="online-mode-tabs">
+                <button type="button" class="seg-btn active" data-tab="create" id="tab-online-create">
+                  Create Private Room
+                </button>
+                <button type="button" class="seg-btn" data-tab="join" id="tab-online-join">
+                  Join Private Room
+                </button>
+              </div>
+
+              <!-- Create Room Panel -->
+              <div class="online-tab-panel" id="panel-online-create">
+                <div class="form-group">
+                  <label id="label-online-host-color">Your Faction</label>
+                  <div class="segmented-control" id="select-online-color">
+                    <button type="button" class="seg-btn active" data-color="w" id="btn-online-color-w">White &amp; Gold</button>
+                    <button type="button" class="seg-btn" data-color="b" id="btn-online-color-b">Black &amp; Gold</button>
+                    <button type="button" class="seg-btn" data-color="random" id="btn-online-color-random">Random</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label id="label-online-map">Battle Arena (Map)</label>
+                  <div class="segmented-control" id="select-online-map">
+                    <button type="button" class="seg-btn active" data-map="cathedral" id="btn-online-map-cathedral">Gothic Cathedral</button>
+                    <button type="button" class="seg-btn" data-map="warhall" id="btn-online-map-warhall">Royal War Hall</button>
+                    <button type="button" class="seg-btn" data-map="sanctum" id="btn-online-map-sanctum">Arcane Sanctum</button>
+                  </div>
+                </div>
+
+                <button type="button" class="menu-primary-btn online-submit-btn" id="btn-online-create-submit">
+                  Create Private Room
+                </button>
+              </div>
+
+              <!-- Join Room Panel -->
+              <div class="online-tab-panel hidden" id="panel-online-join">
+                <div class="form-group">
+                  <label for="input-room-code" id="label-room-code-input">Enter 6-Character Room Code</label>
+                  <input
+                    type="text"
+                    id="input-room-code"
+                    class="room-code-input"
+                    maxlength="8"
+                    placeholder="e.g. ARC7K9"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
+
+                <button type="button" class="menu-primary-btn online-submit-btn" id="btn-online-join-submit">
+                  Join Private Room
+                </button>
+              </div>
+            </div>
+
+            <!-- View 2: Waiting Lobby / Room Status View -->
+            <div class="hidden" id="online-waiting-view">
+              <div class="online-room-code-box">
+                <span class="online-code-label" id="label-room-code">Private Room Code</span>
+                <div class="online-code-row">
+                  <span class="online-room-code-value" id="online-room-code-text">------</span>
+                  <button type="button" class="hud-btn hud-btn-gold" id="btn-copy-room-code">Copy Code</button>
+                </div>
+              </div>
+
+              <div class="online-invite-box">
+                <label class="online-code-label" for="online-invite-url-input" id="label-invite-link">
+                  Shareable Invitation Link
+                </label>
+                <div class="online-invite-row">
+                  <input
+                    type="text"
+                    id="online-invite-url-input"
+                    class="online-invite-input"
+                    readonly
+                    aria-label="Shareable Invitation URL"
+                  />
+                  <button type="button" class="hud-btn" id="btn-copy-invite-link">Copy Invite Link</button>
+                </div>
+              </div>
+
+              <div class="online-seats-grid">
+                <div class="online-seat-card" id="seat-card-white">
+                  <div class="seat-header">
+                    <span class="turn-dot white"></span>
+                    <span class="seat-title" id="seat-white-title">White &amp; Gold Seat</span>
+                  </div>
+                  <div class="seat-status" id="seat-white-status">Waiting for Player...</div>
+                </div>
+
+                <div class="online-seat-card" id="seat-card-black">
+                  <div class="seat-header">
+                    <span class="turn-dot black"></span>
+                    <span class="seat-title" id="seat-black-title">Black &amp; Gold Seat</span>
+                  </div>
+                  <div class="seat-status" id="seat-black-status">Waiting for Player...</div>
+                </div>
+              </div>
+
+              <div class="online-waiting-banner" id="online-waiting-banner">
+                <span class="waiting-pulse-dot" id="online-waiting-dot"></span>
+                <span id="online-waiting-status-text">
+                  Waiting for opponent to join room... Share the code or invite link above.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="hud-btn" id="btn-online-mainmenu">Main Menu</button>
+            <button type="button" class="hud-btn hidden" id="btn-online-leave">Leave Room</button>
+            <button type="button" class="hud-btn hud-btn-gold hidden" id="btn-online-enter-arena">
+              Enter Battle Arena
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Pawn Promotion Picker Modal -->
       <div class="modal-backdrop hidden" id="promotion-modal" role="dialog" aria-modal="true" aria-labelledby="promo-title">
         <div class="modal-card promo-card">
@@ -448,6 +621,7 @@
           <p class="gameover-subtitle" id="gameover-subtitle">
             The White &amp; Gold Army triumphs in the Sanctum!
           </p>
+          <p class="gameover-rematch-status hidden" id="gameover-rematch-status"></p>
           <div class="gameover-actions">
             <button type="button" class="hud-btn hud-btn-gold" id="btn-gameover-rematch">Rematch</button>
             <button type="button" class="hud-btn" id="btn-gameover-new">New Game</button>

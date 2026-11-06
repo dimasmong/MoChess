@@ -2,10 +2,11 @@ import type { Color, PieceSymbol, Square } from 'chess.js';
 
 export type { Color, PieceSymbol, Square };
 
-export type GameMode = 'ai' | 'local';
+export type GameMode = 'ai' | 'local' | 'online';
 export type AIDifficulty = 'novice' | 'knight' | 'archmage' | 'grandmaster';
 export type TimeControlMinutes = 0 | 3 | 5 | 10 | 15;
 export type MapId = 'cathedral' | 'warhall' | 'sanctum';
+export type PieceSkinId = 'arcane_royalty' | 'runic_warforged' | 'mystic_sanctum';
 export type Language = 'en' | 'id';
 
 export interface CastlingRookMove {
@@ -79,6 +80,42 @@ export interface GameConfig {
   aiDifficulty: AIDifficulty;
   timeControlMinutes: TimeControlMinutes;
   mapId?: MapId;
+  skinId?: PieceSkinId;
+  onlineRoomCode?: string;
+}
+
+export type OnlineRoomStatus = 'waiting' | 'playing' | 'finished';
+
+export interface OnlineSeatPublicState {
+  joined: boolean;
+  connected: boolean;
+  lastSeenAt: number;
+  rematchRequested: boolean;
+}
+
+export interface PublicRoomView {
+  roomCode: string;
+  version: number;
+  status: OnlineRoomStatus;
+  mapId: MapId;
+  timeControlMinutes: TimeControlMinutes;
+  fen: string;
+  turn: Color;
+  moveHistory: MoveRecord[];
+  lastMove: { from: Square; to: Square } | null;
+  inCheck: boolean;
+  kingInCheckSquare: Square | null;
+  isGameOver: boolean;
+  winner: Color | 'draw' | null;
+  resultReason: GameResultReason;
+  seats: {
+    w: OnlineSeatPublicState;
+    b: OnlineSeatPublicState;
+  };
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  storageMode?: 'redis' | 'memory';
 }
 
 export interface ClockState {

@@ -4,7 +4,8 @@ import type { Square } from './engine/types';
 import { SceneManager } from './scene/SceneManager';
 import { UIManager } from './ui/UIManager';
 import { aiManager } from './ai/AIManager';
-import { soundManager } from './audio/SoundManager';
+import { soundManager, type SoundManager } from './audio/SoundManager';
+import { onlineClient, type OnlineMultiplayerClient } from './online/OnlineMultiplayerClient';
 
 declare global {
   interface Window {
@@ -12,6 +13,8 @@ declare global {
       engine: ChessGameEngine;
       scene: SceneManager;
       ui: UIManager;
+      online: OnlineMultiplayerClient;
+      sound: SoundManager;
       triggerAIMove: () => Promise<void>;
     };
   }
@@ -49,7 +52,7 @@ function bootstrap(): void {
   );
 
   const triggerAIMove = async (): Promise<void> => {
-    if (engine.isGameOver()) return;
+    if (engine.isGameOver() || engine.getConfig().mode === 'online') return;
     const token = ++aiRequestToken;
     ui.setAIThinking(true);
 
@@ -107,7 +110,15 @@ function bootstrap(): void {
 
     if (res.valid && res.move) {
       soundManager.playForMove(res.move);
-      if (!engine.isGameOver() && engine.isAITurn()) {
+      if (engine.getConfig().mode === 'online') {
+        void onlineClient
+          .submitMove(res.move.from, res.move.to, res.move.promotion)
+          .then((onlineRes) => {
+            if (!onlineRes.ok) {
+              engine.undo(true);
+            }
+          });
+      } else if (!engine.isGameOver() && engine.isAITurn()) {
         void triggerAIMove();
       }
     }
@@ -132,9 +143,16 @@ function bootstrap(): void {
     }
   }, 250);
 
-  // Show Front-End Main Menu by default unless ?autostart=1 is specified
+  // Check URL parameters for ?room=XXXXXX or ?autostart=1
   const params = new URLSearchParams(window.location.search);
-  if (params.get('autostart') === '1') {
+  const urlRoomCode = params.get('room')?.trim();
+  const savedActiveRoom = onlineClient.getSavedActiveRoomCode();
+
+  if (urlRoomCode) {
+    void ui.joinOnlineRoomFromUrl(urlRoomCode);
+  } else if (savedActiveRoom) {
+    void ui.joinOnlineRoomFromUrl(savedActiveRoom);
+  } else if (params.get('autostart') === '1') {
     ui.showMainMenu(false);
     if (engine.isAITurn()) {
       void triggerAIMove();
@@ -147,6 +165,8 @@ function bootstrap(): void {
     engine,
     scene,
     ui,
+    online: onlineClient,
+    sound: soundManager,
     triggerAIMove
   };
 }

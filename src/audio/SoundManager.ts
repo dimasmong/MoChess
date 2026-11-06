@@ -1,4 +1,22 @@
-import type { MoveRecord, PieceSymbol } from '../engine/types';
+import type { MapId, MoveRecord, PieceSymbol } from '../engine/types';
+
+export const MAP_MUSIC_TRACKS: Record<MapId, { trackId: string; titleEn: string; titleId: string }> = {
+  cathedral: {
+    trackId: 'cathedral_solemn_chant',
+    titleEn: 'Cathedral — Solemn Pipe-Organ & Nave Chimes',
+    titleId: 'Katedral — Organ Pipa Khidmat & Lonceng'
+  },
+  warhall: {
+    trackId: 'warhall_noble_march',
+    titleEn: 'War Hall — Noble Brass Horns & War Drums',
+    titleId: 'Aula Perang — Terompet Kerajaan & Genderang'
+  },
+  sanctum: {
+    trackId: 'sanctum_mystic_astra',
+    titleEn: 'Arcane Sanctum — Astral Crystal Choir & Celesta',
+    titleId: 'Sanktum Arkana — Paduan Kristal Astral & Selesta'
+  }
+};
 
 export class SoundManager {
   private static defaultInstance: SoundManager | null = null;
@@ -8,10 +26,24 @@ export class SoundManager {
   private sfxEnabled = true;
   private musicEnabled = true;
   private volume = 0.75;
+  private activeMapId: MapId = 'cathedral';
+  private activeTrackId = MAP_MUSIC_TRACKS.cathedral.trackId;
   private noiseBuffer: AudioBuffer | null = null;
   private musicGain: GainNode | null = null;
   private musicOscillators: OscillatorNode[] = [];
   private musicInterval: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        if (this.musicEnabled && !this.muted) {
+          this.updateMusicState();
+        }
+      };
+      window.addEventListener('pointerdown', unlockAudio, { passive: true });
+      window.addEventListener('keydown', unlockAudio, { passive: true });
+    }
+  }
 
   public static getInstance(): SoundManager {
     if (!SoundManager.defaultInstance) {
@@ -108,6 +140,54 @@ export class SoundManager {
     return this.volume;
   }
 
+  /**
+   * Switches the active background music track to match the selected 3D Arena Map (`cathedral`, `warhall`, `sanctum`).
+   */
+  public setMapMusic(mapId: MapId): void {
+    const nextTrack = MAP_MUSIC_TRACKS[mapId]?.trackId ?? MAP_MUSIC_TRACKS.cathedral.trackId;
+    const changed = this.activeMapId !== mapId || this.activeTrackId !== nextTrack;
+    this.activeMapId = mapId;
+    this.activeTrackId = nextTrack;
+    if (changed) {
+      this.stopMusicNodes();
+      if (this.musicEnabled && !this.muted) {
+        this.updateMusicState();
+      }
+    }
+  }
+
+  public getMusicStatus(): {
+    mapId: MapId;
+    trackId: string;
+    enabled: boolean;
+    playing: boolean;
+    volume: number;
+  } {
+    return {
+      mapId: this.activeMapId,
+      trackId: this.activeTrackId,
+      enabled: this.musicEnabled,
+      playing: this.musicEnabled && !this.muted && this.musicOscillators.length > 0,
+      volume: this.volume
+    };
+  }
+
+  private stopMusicNodes(): void {
+    if (this.musicInterval) {
+      clearInterval(this.musicInterval);
+      this.musicInterval = null;
+    }
+    for (const osc of this.musicOscillators) {
+      try {
+        osc.stop();
+      } catch {
+        // Ignore
+      }
+    }
+    this.musicOscillators = [];
+    this.musicGain = null;
+  }
+
   private getRawContext(): AudioContext | null {
     if (this.ctx) {
       if (this.ctx.state === 'suspended' && typeof this.ctx.resume === 'function') {
@@ -138,19 +218,7 @@ export class SoundManager {
 
   private updateMusicState(): void {
     if (!this.musicEnabled || this.muted || this.volume <= 0) {
-      if (this.musicInterval) {
-        clearInterval(this.musicInterval);
-        this.musicInterval = null;
-      }
-      for (const osc of this.musicOscillators) {
-        try {
-          osc.stop();
-        } catch {
-          // Ignore
-        }
-      }
-      this.musicOscillators = [];
-      this.musicGain = null;
+      this.stopMusicNodes();
       return;
     }
 
@@ -160,50 +228,154 @@ export class SoundManager {
     try {
       const master = ctx.createGain();
       master.gain.setValueAtTime(0.001, ctx.currentTime);
-      master.gain.linearRampToValueAtTime(this.volume * 0.12, ctx.currentTime + 1.5);
+      master.gain.linearRampToValueAtTime(this.volume * 0.13, ctx.currentTime + 1.2);
       master.connect(ctx.destination);
       this.musicGain = master;
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(320, ctx.currentTime);
-      filter.connect(master);
 
-      // Deep dark-fantasy D-minor cathedral drone pad (D2, A2, D3)
-      const droneFreqs = [73.42, 110.0, 146.83];
-      for (const f of droneFreqs) {
-        const osc = ctx.createOscillator();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(f, ctx.currentTime);
-        osc.connect(filter);
-        osc.start();
-        this.musicOscillators.push(osc);
-      }
+      if (this.activeMapId === 'warhall') {
+        // MAP 2: ROYAL WAR HALL — Noble brass-horn fifths in A Phrygian/Aeolian + rhythmic war-drum & horn melody
+        filter.frequency.setValueAtTime(410, ctx.currentTime);
+        filter.connect(master);
 
-      // Sparse medieval harp/celesta notes in D Dorian
-      const scale = [293.66, 329.63, 349.23, 440.0, 493.88, 523.25, 587.33];
-      let noteIdx = 0;
-      this.musicInterval = setInterval(() => {
-        if (!this.musicEnabled || this.muted || !this.ctx || this.ctx.state !== 'running') return;
-        try {
-          const now = this.ctx.currentTime;
-          const freq = scale[(noteIdx * 3 + 1) % scale.length];
-          noteIdx++;
-          const noteOsc = this.ctx.createOscillator();
-          const noteGain = this.ctx.createGain();
-          noteOsc.type = 'sine';
-          noteOsc.frequency.setValueAtTime(freq, now);
-          noteGain.gain.setValueAtTime(0.0001, now);
-          noteGain.gain.linearRampToValueAtTime(this.volume * 0.045, now + 0.08);
-          noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
-          noteOsc.connect(noteGain);
-          noteGain.connect(this.ctx.destination);
-          noteOsc.start(now);
-          noteOsc.stop(now + 2.5);
-        } catch {
-          // Ignore
+        const warHorns: Array<{ f: number; type: OscillatorType }> = [
+          { f: 55.0, type: 'sawtooth' },   // A1 bass horn
+          { f: 82.41, type: 'sawtooth' },  // E2 fifth
+          { f: 110.0, type: 'triangle' },  // A2 octave
+          { f: 130.81, type: 'triangle' }  // C3 minor third
+        ];
+        for (const h of warHorns) {
+          const osc = ctx.createOscillator();
+          osc.type = h.type;
+          osc.frequency.setValueAtTime(h.f, ctx.currentTime);
+          osc.connect(filter);
+          osc.start();
+          this.musicOscillators.push(osc);
         }
-      }, 2800);
+
+        const marchScale = [220.0, 246.94, 261.63, 293.66, 329.63, 392.0, 440.0];
+        let step = 0;
+        this.musicInterval = setInterval(() => {
+          if (!this.musicEnabled || this.muted || !this.ctx || this.ctx.state !== 'running') return;
+          try {
+            const now = this.ctx.currentTime;
+            // Deep royal war-drum pulse on even beats
+            if (step % 2 === 0) {
+              const drumOsc = this.ctx.createOscillator();
+              const drumGain = this.ctx.createGain();
+              drumOsc.type = 'sine';
+              drumOsc.frequency.setValueAtTime(72, now);
+              drumOsc.frequency.exponentialRampToValueAtTime(32, now + 0.32);
+              drumGain.gain.setValueAtTime(this.volume * 0.08, now);
+              drumGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+              drumOsc.connect(drumGain);
+              drumGain.connect(this.ctx.destination);
+              drumOsc.start(now);
+              drumOsc.stop(now + 0.36);
+            }
+            // Noble brass-lute motif
+            const freq = marchScale[(step * 2 + 1) % marchScale.length];
+            step++;
+            const hornOsc = this.ctx.createOscillator();
+            const hornGain = this.ctx.createGain();
+            hornOsc.type = 'triangle';
+            hornOsc.frequency.setValueAtTime(freq, now);
+            hornGain.gain.setValueAtTime(0.0001, now);
+            hornGain.gain.linearRampToValueAtTime(this.volume * 0.05, now + 0.09);
+            hornGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
+            hornOsc.connect(hornGain);
+            hornGain.connect(this.ctx.destination);
+            hornOsc.start(now);
+            hornOsc.stop(now + 1.65);
+          } catch {
+            // Ignore
+          }
+        }, 1850);
+      } else if (this.activeMapId === 'sanctum') {
+        // MAP 3: ARCANE SANCTUM — Mystical C-Lydian celestial crystal choir pad + shimmering celesta arpeggio
+        filter.frequency.setValueAtTime(560, ctx.currentTime);
+        filter.connect(master);
+
+        const crystalPadFreqs: Array<{ f: number; type: OscillatorType }> = [
+          { f: 130.81, type: 'sine' },     // C3
+          { f: 196.0, type: 'triangle' },  // G3
+          { f: 246.94, type: 'sine' },     // B3 (maj7)
+          { f: 293.66, type: 'sine' },     // D4 (9th)
+          { f: 369.99, type: 'triangle' }  // F#4 (#11 Lydian)
+        ];
+        for (const c of crystalPadFreqs) {
+          const osc = ctx.createOscillator();
+          osc.type = c.type;
+          osc.frequency.setValueAtTime(c.f, ctx.currentTime);
+          osc.connect(filter);
+          osc.start();
+          this.musicOscillators.push(osc);
+        }
+
+        const lydianScale = [523.25, 587.33, 659.25, 739.99, 783.99, 987.77, 1046.5];
+        let arpIdx = 0;
+        this.musicInterval = setInterval(() => {
+          if (!this.musicEnabled || this.muted || !this.ctx || this.ctx.state !== 'running') return;
+          try {
+            const now = this.ctx.currentTime;
+            const freq = lydianScale[(arpIdx * 3 + 2) % lydianScale.length];
+            arpIdx++;
+            const celOsc = this.ctx.createOscillator();
+            const celGain = this.ctx.createGain();
+            celOsc.type = 'sine';
+            celOsc.frequency.setValueAtTime(freq, now);
+            celGain.gain.setValueAtTime(0.0001, now);
+            celGain.gain.linearRampToValueAtTime(this.volume * 0.042, now + 0.05);
+            celGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
+            celOsc.connect(celGain);
+            celGain.connect(this.ctx.destination);
+            celOsc.start(now);
+            celOsc.stop(now + 2.65);
+          } catch {
+            // Ignore
+          }
+        }, 2100);
+      } else {
+        // MAP 1: GOTHIC CATHEDRAL — Solemn D-Dorian pipe-organ drone & cathedral nave harp chimes
+        filter.frequency.setValueAtTime(310, ctx.currentTime);
+        filter.connect(master);
+
+        const droneFreqs = [73.42, 110.0, 146.83, 174.61];
+        for (const f of droneFreqs) {
+          const osc = ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(f, ctx.currentTime);
+          osc.connect(filter);
+          osc.start();
+          this.musicOscillators.push(osc);
+        }
+
+        const scale = [293.66, 329.63, 349.23, 440.0, 493.88, 523.25, 587.33];
+        let noteIdx = 0;
+        this.musicInterval = setInterval(() => {
+          if (!this.musicEnabled || this.muted || !this.ctx || this.ctx.state !== 'running') return;
+          try {
+            const now = this.ctx.currentTime;
+            const freq = scale[(noteIdx * 3 + 1) % scale.length];
+            noteIdx++;
+            const noteOsc = this.ctx.createOscillator();
+            const noteGain = this.ctx.createGain();
+            noteOsc.type = 'sine';
+            noteOsc.frequency.setValueAtTime(freq, now);
+            noteGain.gain.setValueAtTime(0.0001, now);
+            noteGain.gain.linearRampToValueAtTime(this.volume * 0.045, now + 0.08);
+            noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
+            noteOsc.connect(noteGain);
+            noteGain.connect(this.ctx.destination);
+            noteOsc.start(now);
+            noteOsc.stop(now + 2.5);
+          } catch {
+            // Ignore
+          }
+        }, 2700);
+      }
     } catch {
       // Ignore in headless environments
     }

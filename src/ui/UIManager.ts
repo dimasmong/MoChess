@@ -8,6 +8,7 @@ import type {
   Language,
   MapId,
   MoveRecord,
+  PieceSkinId,
   PieceSymbol,
   TimeControlMinutes
 } from '../engine/types';
@@ -15,6 +16,10 @@ import type { QualityTier } from '../assets/ProceduralTextures';
 import type { CameraPreset, SceneManager } from '../scene/SceneManager';
 import { soundManager } from '../audio/SoundManager';
 import { getSavedLanguage, saveLanguage, TRANSLATIONS } from './i18n';
+import {
+  onlineClient,
+  type OnlineClientSnapshot
+} from '../online/OnlineMultiplayerClient';
 
 function formatClockMs(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -37,12 +42,16 @@ export class UIManager {
   private turnDotEl = document.getElementById('turn-dot')!;
   private turnTextEl = document.getElementById('turn-text')!;
   private modeBadgeEl = document.getElementById('mode-badge')!;
+  private onlineHudBadgeEl = document.getElementById('online-hud-badge')!;
   private mapBadgeEl = document.getElementById('map-badge')!;
   private clockBadgeEl = document.getElementById('clock-badge')!;
   private capturedSummaryEl = document.getElementById('captured-summary')!;
   private switchSideBtn = document.getElementById('btn-switch-side') as HTMLButtonElement;
   private aiMoveBtn = document.getElementById('btn-ai-move') as HTMLButtonElement;
+  private resignBtn = document.getElementById('btn-resign') as HTMLButtonElement;
+  private newGameBtn = document.getElementById('btn-new-game') as HTMLButtonElement;
   private undoBtn = document.getElementById('btn-undo') as HTMLButtonElement;
+  private restartBtn = document.getElementById('btn-restart') as HTMLButtonElement;
   private cameraBtn = document.getElementById('btn-camera') as HTMLButtonElement;
 
   private historyDrawer = document.getElementById('history-drawer')!;
@@ -52,6 +61,7 @@ export class UIManager {
 
   private mapSelectModal = document.getElementById('map-select-modal')!;
   private lobbyModal = document.getElementById('lobby-modal')!;
+  private onlineModal = document.getElementById('online-modal')!;
   private settingsModal = document.getElementById('settings-modal')!;
   private creditsModal = document.getElementById('credits-modal')!;
   private promotionModal = document.getElementById('promotion-modal')!;
@@ -59,10 +69,33 @@ export class UIManager {
   private gameoverTitleEl = document.getElementById('gameover-title')!;
   private gameoverWinnerPillEl = document.getElementById('gameover-winner-pill')!;
   private gameoverSubtitleEl = document.getElementById('gameover-subtitle')!;
+  private gameoverRematchStatusEl = document.getElementById('gameover-rematch-status')!;
+
+  // Online Modal Elements
+  private onlineErrorBanner = document.getElementById('online-error-banner')!;
+  private onlineSetupView = document.getElementById('online-setup-view')!;
+  private onlineWaitingView = document.getElementById('online-waiting-view')!;
+  private panelOnlineCreate = document.getElementById('panel-online-create')!;
+  private panelOnlineJoin = document.getElementById('panel-online-join')!;
+  private inputRoomCode = document.getElementById('input-room-code') as HTMLInputElement;
+  private onlineRoomCodeText = document.getElementById('online-room-code-text')!;
+  private onlineInviteUrlInput = document.getElementById('online-invite-url-input') as HTMLInputElement;
+  private seatCardWhite = document.getElementById('seat-card-white')!;
+  private seatCardBlack = document.getElementById('seat-card-black')!;
+  private seatWhiteStatus = document.getElementById('seat-white-status')!;
+  private seatBlackStatus = document.getElementById('seat-black-status')!;
+  private onlineWaitingStatusText = document.getElementById('online-waiting-status-text')!;
+  private btnOnlineLeave = document.getElementById('btn-online-leave') as HTMLButtonElement;
+  private btnOnlineEnterArena = document.getElementById('btn-online-enter-arena') as HTMLButtonElement;
 
   private draftConfig: GameConfig;
+  private onlineHostColor: Color | 'random' = 'w';
+  private onlineMapId: MapId = 'cathedral';
+  private onlineTab: 'create' | 'join' = 'create';
+  private launchedRoomVersionKey: string | null = null;
+
   private aiThinking = false;
-  private lastGameOverShownFen: string | null = null;
+  private lastGameOverShownKey: string | null = null;
 
   constructor(
     engine: ChessGameEngine,
@@ -85,6 +118,35 @@ export class UIManager {
 
     this.bindUIEvents();
     this.applyTranslations();
+    this.syncSkinButtons(this.draftConfig.skinId ?? 'arcane_royalty');
+
+    const initMap = this.draftConfig.mapId ?? 'cathedral';
+    soundManager.setMapMusic(initMap);
+
+    const initQuality = this.scene.getSettings().quality;
+    document.querySelectorAll('#select-quality .seg-btn').forEach((b) => {
+      b.classList.toggle('active', (b as HTMLElement).dataset.quality === initQuality);
+    });
+
+    onlineClient.subscribe((onlineSnap) => {
+      this.handleOnlineClientUpdate(onlineSnap);
+    });
+  }
+
+  public setPieceSkin(skinId: PieceSkinId): void {
+    this.draftConfig.skinId = skinId;
+    this.engine.setSkin(skinId);
+    this.scene.setPieceSkin(skinId);
+    this.syncSkinButtons(skinId);
+  }
+
+  private syncSkinButtons(skinId: PieceSkinId): void {
+    const selectors = ['#select-menu-skin .seg-btn', '#select-lobby-skin .seg-btn', '#select-setting-skin .seg-btn'];
+    for (const sel of selectors) {
+      document.querySelectorAll(sel).forEach((b) => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.skin === skinId);
+      });
+    }
   }
 
   public getLanguage(): Language {
@@ -99,6 +161,8 @@ export class UIManager {
     this.updateFromSnapshot(this.engine.getSnapshot());
     this.syncLobbyControlsWithDraft();
     this.syncMapCards();
+    this.syncOnlineControls();
+    this.handleOnlineClientUpdate(onlineClient.getSnapshot());
   }
 
   public showMainMenu(visible: boolean): void {
@@ -108,6 +172,23 @@ export class UIManager {
 
   public isMainMenuVisible(): boolean {
     return !this.mainMenuScreen.classList.contains('hidden');
+  }
+
+  public openOnlineModal(tab?: 'create' | 'join'): void {
+    if (tab) {
+      this.onlineTab = tab;
+    }
+    this.onlineErrorBanner.classList.add('hidden');
+    this.syncOnlineControls();
+    this.handleOnlineClientUpdate(onlineClient.getSnapshot());
+    this.onlineModal.classList.remove('hidden');
+  }
+
+  public async joinOnlineRoomFromUrl(roomCode: string): Promise<void> {
+    this.showMainMenu(false);
+    this.openOnlineModal('join');
+    this.inputRoomCode.value = roomCode.toUpperCase();
+    await onlineClient.joinRoom(roomCode);
   }
 
   private getMapDisplayName(mapId: MapId): string {
@@ -146,8 +227,13 @@ export class UIManager {
     setText('menu-subtitle', t.menuSubtitle);
     setText('menu-tagline', t.menuTagline);
     setText('btn-menu-play', t.btnPlay);
+    setText('btn-menu-online', t.btnOnlinePvP);
     setText('btn-menu-maps', t.btnMapSelect);
     setText('btn-menu-settings', t.btnSettings);
+    setText('label-menu-skin', t.labelPieceSkin);
+    setText('btn-menu-skin-royalty', t.skinArcaneRoyalty);
+    setText('btn-menu-skin-warforged', t.skinRunicWarforged);
+    setText('btn-menu-skin-sanctum', t.skinMysticSanctum);
     setText('btn-menu-lang', `${t.btnLanguage}: ${this.lang.toUpperCase()}`);
     setText('btn-menu-credits', t.btnCredits);
     setText('btn-skip-intro', t.btnSkipIntro);
@@ -156,8 +242,10 @@ export class UIManager {
     setText('hud-brand-title', t.brandTitle);
     setText('btn-main-menu', t.btnMainMenu);
     setText('btn-lobby', t.btnLobby);
+    setText('btn-online-room', t.btnOnlinePvP);
     setText('btn-maps', t.btnMapSelect.split(' ')[0]);
     setText('btn-ai-move', t.btnAIMove);
+    setText('btn-resign', t.btnResign);
     setText('btn-new-game', t.btnNewGame);
     setText('hud-hint-text', t.hintText);
     setText('btn-undo', t.btnUndo);
@@ -188,6 +276,7 @@ export class UIManager {
     setText('label-game-mode', t.labelGameMode);
     setText('btn-mode-ai', t.modeVsAI);
     setText('btn-mode-local', t.modeLocal2P);
+    setText('btn-mode-online', t.btnOnlinePvP);
     setText('label-your-faction', t.labelYourFaction);
     setText('btn-color-w', t.factionWhite);
     setText('btn-color-b', t.factionBlack);
@@ -205,6 +294,10 @@ export class UIManager {
     setText('btn-lobby-map-cathedral', t.mapCathedral);
     setText('btn-lobby-map-warhall', t.mapWarHall);
     setText('btn-lobby-map-sanctum', t.mapSanctum);
+    setText('label-lobby-skin', t.labelPieceSkin);
+    setText('btn-lobby-skin-royalty', t.skinArcaneRoyalty);
+    setText('btn-lobby-skin-warforged', t.skinRunicWarforged);
+    setText('btn-lobby-skin-sanctum', t.skinMysticSanctum);
     setText('label-camera-preset', t.labelCameraPreset);
     setText('btn-cam-gameplay', t.camGameplay);
     setText('btn-cam-top', t.camOverhead);
@@ -213,6 +306,35 @@ export class UIManager {
     setText('btn-lobby-resume', t.btnResumeMatch);
     setText('btn-lobby-start', t.btnStartMatch);
 
+    // Online Private PvP Modal
+    setText('online-modal-title', t.onlineTitle);
+    setText('online-modal-subtitle', t.onlineSubtitle);
+    setText('tab-online-create', t.tabCreateRoom);
+    setText('tab-online-join', t.tabJoinRoom);
+    setText('label-online-host-color', t.labelHostColor);
+    setText('btn-online-color-w', t.factionWhite);
+    setText('btn-online-color-b', t.factionBlack);
+    setText('btn-online-color-random', t.factionRandom);
+    setText('label-online-map', t.labelArenaMap);
+    setText('btn-online-map-cathedral', t.mapCathedral);
+    setText('btn-online-map-warhall', t.mapWarHall);
+    setText('btn-online-map-sanctum', t.mapSanctum);
+    setText('btn-online-create-submit', t.btnCreateRoomSubmit);
+    setText('label-room-code-input', t.labelRoomCodeInput);
+    if (this.inputRoomCode) {
+      this.inputRoomCode.placeholder = t.roomCodePlaceholder;
+    }
+    setText('btn-online-join-submit', t.btnJoinRoomSubmit);
+    setText('label-room-code', t.labelRoomCode);
+    setText('btn-copy-room-code', t.btnCopyCode);
+    setText('label-invite-link', t.labelInviteLink);
+    setText('btn-copy-invite-link', t.btnCopyInviteLink);
+    setText('seat-white-title', t.seatWhiteTitle);
+    setText('seat-black-title', t.seatBlackTitle);
+    setText('btn-online-mainmenu', t.btnMainMenu);
+    setText('btn-online-leave', t.btnLeaveRoom);
+    setText('btn-online-enter-arena', t.btnEnterArena);
+
     // Settings Modal
     setText('settings-title', t.settingsTitle);
     setText('label-setting-lang', t.settingLanguage);
@@ -220,6 +342,10 @@ export class UIManager {
     setText('btn-quality-low', t.qualityLow);
     setText('btn-quality-medium', t.qualityMedium);
     setText('btn-quality-high', t.qualityHigh);
+    setText('label-setting-skin', t.labelPieceSkin);
+    setText('btn-setting-skin-royalty', t.skinArcaneRoyalty);
+    setText('btn-setting-skin-warforged', t.skinRunicWarforged);
+    setText('btn-setting-skin-sanctum', t.skinMysticSanctum);
     setText('label-setting-volume', t.settingVolume);
     setText('label-setting-music', t.settingMusic);
     setText('label-setting-sfx', t.settingSfx);
@@ -265,6 +391,134 @@ export class UIManager {
     });
   }
 
+  private handleOnlineClientUpdate(snap: OnlineClientSnapshot): void {
+    const t = TRANSLATIONS[this.lang];
+
+    if (snap.error) {
+      this.onlineErrorBanner.textContent = snap.error;
+      this.onlineErrorBanner.classList.remove('hidden');
+    } else {
+      this.onlineErrorBanner.classList.add('hidden');
+    }
+
+    if (!snap.active || !snap.room || !snap.roomCode) {
+      this.onlineSetupView.classList.remove('hidden');
+      this.onlineWaitingView.classList.add('hidden');
+      this.btnOnlineLeave.classList.add('hidden');
+      this.btnOnlineEnterArena.classList.add('hidden');
+      this.onlineHudBadgeEl.classList.add('hidden');
+      this.launchedRoomVersionKey = null;
+      return;
+    }
+
+    const room = snap.room;
+    const myColor = snap.playerColor ?? 'w';
+
+    // Show Waiting / Room Status View inside Online Modal
+    this.onlineSetupView.classList.add('hidden');
+    this.onlineWaitingView.classList.remove('hidden');
+    this.btnOnlineLeave.classList.remove('hidden');
+
+    this.onlineRoomCodeText.textContent = room.roomCode;
+    this.onlineInviteUrlInput.value = onlineClient.getInviteUrl(room.roomCode);
+
+    // Update White & Black seat status cards
+    const formatSeatStatus = (seatColor: Color) => {
+      const seat = room.seats[seatColor];
+      if (!seat.joined) return t.seatWaitingOpponent;
+      if (!seat.connected) return t.seatReconnecting;
+      return myColor === seatColor ? t.seatYouConnected : t.seatOpponentConnected;
+    };
+
+    this.seatWhiteStatus.textContent = formatSeatStatus('w');
+    this.seatBlackStatus.textContent = formatSeatStatus('b');
+    this.seatCardWhite.classList.toggle('ready', room.seats.w.joined && room.seats.w.connected);
+    this.seatCardBlack.classList.toggle('ready', room.seats.b.joined && room.seats.b.connected);
+
+    const bothJoined = room.seats.w.joined && room.seats.b.joined;
+    if (bothJoined) {
+      this.onlineWaitingStatusText.textContent = t.bothPlayersReadyBanner;
+      this.btnOnlineEnterArena.classList.remove('hidden');
+    } else {
+      this.onlineWaitingStatusText.textContent = t.waitingForOpponentBanner;
+      this.btnOnlineEnterArena.classList.add('hidden');
+    }
+
+    // Update Top HUD Online Status Badge
+    this.onlineHudBadgeEl.classList.remove('hidden');
+    let statusLabel = t.onlineStatusConnected;
+    this.onlineHudBadgeEl.classList.remove('waiting', 'reconnecting');
+
+    if (snap.connectionStatus === 'waiting') {
+      statusLabel = t.onlineStatusWaiting;
+      this.onlineHudBadgeEl.classList.add('waiting');
+    } else if (snap.connectionStatus === 'opponent_reconnecting') {
+      statusLabel = t.onlineStatusOpponentReconnecting;
+      this.onlineHudBadgeEl.classList.add('reconnecting');
+    } else if (snap.connectionStatus === 'reconnecting') {
+      statusLabel = t.onlineStatusReconnecting;
+      this.onlineHudBadgeEl.classList.add('reconnecting');
+    }
+    this.onlineHudBadgeEl.textContent = `Room ${room.roomCode} • ${statusLabel}`;
+
+    // Sync Map if different
+    if (this.engine.getConfig().mapId !== room.mapId) {
+      this.scene.setMap(room.mapId);
+      soundManager.setMapMusic(room.mapId);
+    }
+
+    // Synchronize ChessGameEngine with authoritative room state
+    const wasGameOver = this.engine.isGameOver();
+    const animatedMove = this.engine.syncFromOnlineRoom(room, myColor);
+    if (animatedMove) {
+      soundManager.playForMove(animatedMove);
+    }
+
+    // Automatically transition into the 3D Arena when both players join (or on rematch reset)
+    const matchKey = `${room.roomCode}:${bothJoined ? 'ready' : 'wait'}`;
+    if (bothJoined && this.launchedRoomVersionKey !== matchKey) {
+      this.launchedRoomVersionKey = matchKey;
+      this.showMainMenu(false);
+      this.onlineModal.classList.add('hidden');
+      this.lobbyModal.classList.add('hidden');
+      this.scene.setMap(room.mapId);
+
+      if (room.moveHistory.length === 0 && !room.isGameOver) {
+        this.scene.playOpeningCinematic(myColor, () => {
+          this.cameraBtn.textContent = this.getCameraDisplayLabel(this.scene.getCameraPreset());
+        });
+      } else {
+        this.scene.setCameraPreset('gameplay', false, myColor);
+        this.cameraBtn.textContent = this.getCameraDisplayLabel(this.scene.getCameraPreset());
+      }
+    } else if (wasGameOver && !room.isGameOver && room.moveHistory.length === 0) {
+      // Rematch just started!
+      this.gameoverModal.classList.add('hidden');
+      this.gameoverRematchStatusEl.classList.add('hidden');
+      this.scene.setCameraPreset('gameplay', false, myColor);
+    }
+
+    // Update Rematch Status Banner inside Game Over Modal if match is finished
+    if (room.isGameOver) {
+      const mySeat = room.seats[myColor];
+      const oppColor: Color = myColor === 'w' ? 'b' : 'w';
+      const oppSeat = room.seats[oppColor];
+      if (mySeat.rematchRequested && !oppSeat.rematchRequested) {
+        this.gameoverRematchStatusEl.textContent = t.rematchWaitingOpponent;
+        this.gameoverRematchStatusEl.classList.remove('hidden');
+      } else if (!mySeat.rematchRequested && oppSeat.rematchRequested) {
+        this.gameoverRematchStatusEl.textContent = t.rematchOpponentRequested;
+        this.gameoverRematchStatusEl.classList.remove('hidden');
+      } else {
+        this.gameoverRematchStatusEl.classList.add('hidden');
+      }
+    } else {
+      this.gameoverRematchStatusEl.classList.add('hidden');
+    }
+
+    this.updateFromSnapshot(this.engine.getSnapshot());
+  }
+
   public setAIThinking(thinking: boolean): void {
     this.aiThinking = thinking;
     this.updateStatusHeader(this.engine.getSnapshot());
@@ -276,31 +530,43 @@ export class UIManager {
 
   public updateFromSnapshot(snapshot: GameStateSnapshot, _lastMove?: MoveRecord): void {
     const t = TRANSLATIONS[this.lang];
+    const isOnline = snapshot.config.mode === 'online';
+
     this.updateStatusHeader(snapshot);
     this.updateCapturedAndHistory(snapshot);
 
     this.switchSideBtn.textContent =
       snapshot.config.playerColor === 'w' ? t.btnPlayAsBlack : t.btnPlayAsWhite;
 
+    // Toggle online vs offline controls
+    this.switchSideBtn.classList.toggle('hidden', isOnline);
+    this.aiMoveBtn.classList.toggle('hidden', isOnline || snapshot.config.mode === 'local');
+    this.resignBtn.classList.toggle('hidden', !isOnline || snapshot.isGameOver);
+    this.newGameBtn.classList.toggle('hidden', isOnline);
+    this.undoBtn.classList.toggle('hidden', isOnline);
+    this.restartBtn.classList.toggle('hidden', isOnline);
+
     const mapId = snapshot.config.mapId ?? 'cathedral';
     this.mapBadgeEl.textContent = this.getMapDisplayName(mapId);
 
-    this.undoBtn.disabled = snapshot.moveHistory.length === 0 || this.aiThinking;
-    this.aiMoveBtn.disabled = snapshot.isGameOver || this.aiThinking;
+    this.undoBtn.disabled = isOnline || snapshot.moveHistory.length === 0 || this.aiThinking;
+    this.aiMoveBtn.disabled = isOnline || snapshot.isGameOver || this.aiThinking;
 
     if (snapshot.isGameOver) {
-      if (this.lastGameOverShownFen !== snapshot.fen) {
-        this.lastGameOverShownFen = snapshot.fen;
+      const gameOverKey = `${snapshot.fen}:${snapshot.resultReason}:${snapshot.winner}`;
+      if (this.lastGameOverShownKey !== gameOverKey) {
+        this.lastGameOverShownKey = gameOverKey;
         this.presentGameOverModal(snapshot);
       }
     } else {
-      this.lastGameOverShownFen = null;
+      this.lastGameOverShownKey = null;
       this.gameoverModal.classList.add('hidden');
     }
   }
 
   private updateStatusHeader(snapshot: GameStateSnapshot): void {
     const t = TRANSLATIONS[this.lang];
+    const isOnline = snapshot.config.mode === 'online';
 
     this.turnDotEl.className = 'turn-dot';
     if (snapshot.inCheck && !snapshot.isGameOver) {
@@ -315,12 +581,19 @@ export class UIManager {
         this.turnTextEl.textContent = reason;
       } else {
         const winText = snapshot.winner === 'w' ? t.whiteWins : t.blackWins;
-        this.turnTextEl.textContent = `${t.checkmateBanner} • ${winText}`;
+        const banner =
+          snapshot.resultReason === 'resignation' ? t.resignationTitle : t.checkmateBanner;
+        this.turnTextEl.textContent = `${banner} • ${winText}`;
       }
     } else {
       const isWhite = snapshot.turn === 'w';
       const isAISide = snapshot.config.mode === 'ai' && snapshot.turn !== snapshot.config.playerColor;
-      if (this.aiThinking || isAISide) {
+      if (isOnline) {
+        const baseTurn = isWhite ? t.whiteToMove : t.blackToMove;
+        const turnOwner =
+          snapshot.turn === snapshot.config.playerColor ? t.onlineYourTurn : t.onlineOpponentTurn;
+        this.turnTextEl.textContent = `${baseTurn} (${turnOwner})`;
+      } else if (this.aiThinking || isAISide) {
         this.turnTextEl.textContent = isWhite ? t.whiteToMoveAI : t.blackToMoveAI;
       } else if (snapshot.inCheck) {
         this.turnTextEl.textContent = isWhite ? t.whiteInCheck : t.blackInCheck;
@@ -329,14 +602,17 @@ export class UIManager {
       }
     }
 
-    if (snapshot.config.mode === 'ai') {
+    if (isOnline) {
+      this.modeBadgeEl.textContent =
+        snapshot.config.playerColor === 'w' ? t.onlineYouWhite : t.onlineYouBlack;
+    } else if (snapshot.config.mode === 'ai') {
       this.modeBadgeEl.textContent =
         snapshot.config.playerColor === 'w' ? t.singlePlayerYouWhite : t.singlePlayerYouBlack;
     } else {
       this.modeBadgeEl.textContent = t.twoPlayerLocal;
     }
 
-    if (snapshot.clock.enabled) {
+    if (snapshot.clock.enabled && !isOnline) {
       this.clockBadgeEl.classList.remove('hidden');
       this.clockBadgeEl.textContent = `W ${formatClockMs(snapshot.clock.whiteMs)} | B ${formatClockMs(snapshot.clock.blackMs)}`;
     } else {
@@ -394,8 +670,13 @@ export class UIManager {
       this.gameoverSubtitleEl.textContent = `${t.drawSubtitlePrefix} ${reason}.`;
     } else {
       const isWhiteWin = snapshot.winner === 'w';
-      this.gameoverTitleEl.textContent =
-        snapshot.resultReason === 'timeout' ? t.timeoutTitle : t.checkmateTitle;
+      if (snapshot.resultReason === 'timeout') {
+        this.gameoverTitleEl.textContent = t.timeoutTitle;
+      } else if (snapshot.resultReason === 'resignation') {
+        this.gameoverTitleEl.textContent = t.resignationTitle;
+      } else {
+        this.gameoverTitleEl.textContent = t.checkmateTitle;
+      }
       this.gameoverWinnerPillEl.textContent = isWhiteWin ? t.whiteWins : t.blackWins;
       this.gameoverSubtitleEl.textContent = isWhiteWin ? t.whiteWinsSubtitle : t.blackWinsSubtitle;
     }
@@ -407,8 +688,13 @@ export class UIManager {
    * followed automatically by the centered Gameplay Chess Camera.
    */
   public startMatchWithIntro(config?: Partial<GameConfig>): void {
+    if (config?.mode && config.mode !== 'online') {
+      onlineClient.leaveRoom();
+    }
+
     this.showMainMenu(false);
     this.lobbyModal.classList.add('hidden');
+    this.onlineModal.classList.add('hidden');
     this.mapSelectModal.classList.add('hidden');
     this.gameoverModal.classList.add('hidden');
 
@@ -416,6 +702,11 @@ export class UIManager {
     const activeCfg = this.engine.getConfig();
     if (activeCfg.mapId) {
       this.scene.setMap(activeCfg.mapId);
+      soundManager.setMapMusic(activeCfg.mapId);
+    }
+    if (activeCfg.skinId) {
+      this.scene.setPieceSkin(activeCfg.skinId);
+      this.syncSkinButtons(activeCfg.skinId);
     }
 
     this.scene.playOpeningCinematic(activeCfg.playerColor, () => {
@@ -431,8 +722,16 @@ export class UIManager {
     document.getElementById('btn-menu-play')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.draftConfig = this.engine.getConfig();
+      if (this.draftConfig.mode === 'online') {
+        this.draftConfig.mode = 'ai';
+      }
       this.syncLobbyControlsWithDraft();
       this.lobbyModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-menu-online')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.openOnlineModal('create');
     });
 
     document.getElementById('btn-menu-maps')?.addEventListener('click', () => {
@@ -462,7 +761,7 @@ export class UIManager {
       this.cameraBtn.textContent = this.getCameraDisplayLabel(this.scene.getCameraPreset());
     });
 
-    // 1. Top-Right HUD Bar: Main Menu, Lobby, Maps, Switch Side, AI Move, New Game
+    // 1. Top-Right HUD Bar: Main Menu, Lobby, Online PvP, Maps, Switch Side, AI Move, Resign, New Game
     document.getElementById('btn-main-menu')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.showMainMenu(true);
@@ -471,8 +770,16 @@ export class UIManager {
     document.getElementById('btn-lobby')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.draftConfig = this.engine.getConfig();
+      if (this.draftConfig.mode === 'online') {
+        this.draftConfig.mode = 'ai';
+      }
       this.syncLobbyControlsWithDraft();
       this.lobbyModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-online-room')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.openOnlineModal();
     });
 
     document.getElementById('btn-maps')?.addEventListener('click', () => {
@@ -482,6 +789,7 @@ export class UIManager {
     });
 
     this.switchSideBtn.addEventListener('click', () => {
+      if (this.engine.getConfig().mode === 'online') return;
       soundManager.playSelect();
       const current = this.engine.getConfig();
       const nextColor: Color = current.playerColor === 'w' ? 'b' : 'w';
@@ -494,11 +802,19 @@ export class UIManager {
     });
 
     this.aiMoveBtn.addEventListener('click', () => {
+      if (this.engine.getConfig().mode === 'online') return;
       soundManager.playSelect();
       this.onTriggerAIMove();
     });
 
-    document.getElementById('btn-new-game')?.addEventListener('click', () => {
+    this.resignBtn?.addEventListener('click', () => {
+      if (this.engine.getConfig().mode !== 'online') return;
+      soundManager.playSelect();
+      void onlineClient.resign();
+    });
+
+    this.newGameBtn?.addEventListener('click', () => {
+      if (this.engine.getConfig().mode === 'online') return;
       soundManager.playSelect();
       this.engine.restart();
       this.scene.setCameraPreset('gameplay', false, this.engine.getConfig().playerColor);
@@ -509,12 +825,13 @@ export class UIManager {
 
     // 2. Bottom Micro Action Bar: Undo, Restart, Camera, History, Settings
     this.undoBtn.addEventListener('click', () => {
-      if (this.aiThinking) return;
+      if (this.aiThinking || this.engine.getConfig().mode === 'online') return;
       soundManager.playSelect();
       this.engine.undo();
     });
 
-    document.getElementById('btn-restart')?.addEventListener('click', () => {
+    this.restartBtn?.addEventListener('click', () => {
+      if (this.engine.getConfig().mode === 'online') return;
       soundManager.playSelect();
       this.engine.restart();
       if (this.engine.isAITurn()) {
@@ -552,10 +869,13 @@ export class UIManager {
         soundManager.playSelect();
         const mapId = (card as HTMLElement).dataset.map as MapId;
         this.draftConfig.mapId = mapId;
+        this.onlineMapId = mapId;
         this.engine.setMap(mapId);
         this.scene.setMap(mapId);
+        soundManager.setMapMusic(mapId);
         this.syncMapCards();
         this.syncLobbyControlsWithDraft();
+        this.syncOnlineControls();
       });
     });
 
@@ -585,6 +905,12 @@ export class UIManager {
     document.querySelectorAll('#select-mode .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const mode = (btn as HTMLElement).dataset.mode as GameMode;
+        if (mode === 'online') {
+          soundManager.playSelect();
+          this.lobbyModal.classList.add('hidden');
+          this.openOnlineModal('create');
+          return;
+        }
         this.draftConfig.mode = mode;
         this.syncLobbyControlsWithDraft();
       });
@@ -619,10 +945,22 @@ export class UIManager {
         const mapId = (btn as HTMLElement).dataset.map as MapId;
         this.draftConfig.mapId = mapId;
         this.scene.setMap(mapId);
+        soundManager.setMapMusic(mapId);
         this.syncLobbyControlsWithDraft();
         this.syncMapCards();
       });
     });
+
+    // Bind Chess Piece Skin Selection across Main Menu, Lobby, and Settings
+    for (const sel of ['#select-menu-skin .seg-btn', '#select-lobby-skin .seg-btn', '#select-setting-skin .seg-btn']) {
+      document.querySelectorAll(sel).forEach((btn) => {
+        btn.addEventListener('click', () => {
+          soundManager.playSelect();
+          const skinId = ((btn as HTMLElement).dataset.skin as PieceSkinId) ?? 'arcane_royalty';
+          this.setPieceSkin(skinId);
+        });
+      });
+    }
 
     document.querySelectorAll('#select-camera-preset .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -636,6 +974,109 @@ export class UIManager {
     document.getElementById('btn-lobby-start')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.startMatchWithIntro(this.draftConfig);
+    });
+
+    // 4B. Online Private PvP Modal Interactions
+    document.getElementById('btn-close-online')?.addEventListener('click', () => {
+      this.onlineModal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-online-mainmenu')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.onlineModal.classList.add('hidden');
+      this.showMainMenu(true);
+    });
+
+    document.querySelectorAll('#online-mode-tabs .seg-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        soundManager.playSelect();
+        this.onlineTab = ((btn as HTMLElement).dataset.tab as 'create' | 'join') ?? 'create';
+        this.onlineErrorBanner.classList.add('hidden');
+        this.syncOnlineControls();
+      });
+    });
+
+    document.querySelectorAll('#select-online-color .seg-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        soundManager.playSelect();
+        this.onlineHostColor =
+          ((btn as HTMLElement).dataset.color as Color | 'random') ?? 'w';
+        this.syncOnlineControls();
+      });
+    });
+
+    document.querySelectorAll('#select-online-map .seg-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        soundManager.playSelect();
+        this.onlineMapId = ((btn as HTMLElement).dataset.map as MapId) ?? 'cathedral';
+        this.scene.setMap(this.onlineMapId);
+        soundManager.setMapMusic(this.onlineMapId);
+        this.syncOnlineControls();
+      });
+    });
+
+    document.getElementById('btn-online-create-submit')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      void onlineClient.createRoom({
+        hostColor: this.onlineHostColor,
+        mapId: this.onlineMapId,
+        timeControlMinutes: 0
+      });
+    });
+
+    document.getElementById('btn-online-join-submit')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      const code = this.inputRoomCode.value.trim();
+      void onlineClient.joinRoom(code);
+    });
+
+    this.inputRoomCode?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        soundManager.playSelect();
+        void onlineClient.joinRoom(this.inputRoomCode.value.trim());
+      }
+    });
+
+    document.getElementById('btn-copy-room-code')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      const code = onlineClient.getSnapshot().roomCode ?? '';
+      if (!code) return;
+      void navigator.clipboard?.writeText(code);
+      const btn = document.getElementById('btn-copy-room-code');
+      if (btn) {
+        btn.textContent = TRANSLATIONS[this.lang].btnCopied;
+        setTimeout(() => {
+          btn.textContent = TRANSLATIONS[this.lang].btnCopyCode;
+        }, 1600);
+      }
+    });
+
+    document.getElementById('btn-copy-invite-link')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      const url = this.onlineInviteUrlInput.value;
+      if (!url) return;
+      void navigator.clipboard?.writeText(url);
+      const btn = document.getElementById('btn-copy-invite-link');
+      if (btn) {
+        btn.textContent = TRANSLATIONS[this.lang].btnCopied;
+        setTimeout(() => {
+          btn.textContent = TRANSLATIONS[this.lang].btnCopyInviteLink;
+        }, 1600);
+      }
+    });
+
+    this.btnOnlineLeave?.addEventListener('click', () => {
+      soundManager.playSelect();
+      onlineClient.leaveRoom();
+      this.engine.startNewGame({ mode: 'ai', playerColor: 'w' });
+      this.syncOnlineControls();
+    });
+
+    this.btnOnlineEnterArena?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.onlineModal.classList.add('hidden');
+      this.showMainMenu(false);
     });
 
     // 5. Settings Modal Interactions
@@ -716,7 +1157,9 @@ export class UIManager {
         const res = this.engine.completePromotion(piece);
         if (res.valid && res.move) {
           soundManager.playPromote();
-          if (this.engine.isAITurn()) {
+          if (this.engine.getConfig().mode === 'online') {
+            void onlineClient.submitMove(res.move.from, res.move.to, res.move.promotion);
+          } else if (this.engine.isAITurn()) {
             this.onTriggerAIMove();
           }
         }
@@ -726,6 +1169,10 @@ export class UIManager {
     // 8. Checkmate / Game Over Modal Buttons (Rematch, New Game, Return to Lobby, Review Board)
     document.getElementById('btn-gameover-rematch')?.addEventListener('click', () => {
       soundManager.playSelect();
+      if (this.engine.getConfig().mode === 'online') {
+        void onlineClient.requestRematch();
+        return;
+      }
       this.gameoverModal.classList.add('hidden');
       this.engine.restart();
       this.scene.setCameraPreset('gameplay', false, this.engine.getConfig().playerColor);
@@ -737,12 +1184,21 @@ export class UIManager {
     document.getElementById('btn-gameover-new')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.gameoverModal.classList.add('hidden');
+      if (this.engine.getConfig().mode === 'online') {
+        onlineClient.leaveRoom();
+        this.openOnlineModal('create');
+        return;
+      }
       this.startMatchWithIntro(this.engine.getConfig());
     });
 
     document.getElementById('btn-gameover-lobby')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.gameoverModal.classList.add('hidden');
+      if (this.engine.getConfig().mode === 'online') {
+        this.openOnlineModal();
+        return;
+      }
       this.draftConfig = this.engine.getConfig();
       this.syncLobbyControlsWithDraft();
       this.lobbyModal.classList.remove('hidden');
@@ -751,6 +1207,21 @@ export class UIManager {
     document.getElementById('btn-gameover-review')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.gameoverModal.classList.add('hidden');
+    });
+  }
+
+  private syncOnlineControls(): void {
+    document.querySelectorAll('#online-mode-tabs .seg-btn').forEach((b) => {
+      b.classList.toggle('active', (b as HTMLElement).dataset.tab === this.onlineTab);
+    });
+    this.panelOnlineCreate.classList.toggle('hidden', this.onlineTab !== 'create');
+    this.panelOnlineJoin.classList.toggle('hidden', this.onlineTab !== 'join');
+
+    document.querySelectorAll('#select-online-color .seg-btn').forEach((b) => {
+      b.classList.toggle('active', (b as HTMLElement).dataset.color === this.onlineHostColor);
+    });
+    document.querySelectorAll('#select-online-map .seg-btn').forEach((b) => {
+      b.classList.toggle('active', (b as HTMLElement).dataset.map === this.onlineMapId);
     });
   }
 
@@ -781,6 +1252,7 @@ export class UIManager {
     document.querySelectorAll('#select-lobby-map .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.map === draftMap);
     });
+    this.syncSkinButtons(this.draftConfig.skinId ?? 'arcane_royalty');
     document.querySelectorAll('#select-camera-preset .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.cam === this.scene.getCameraPreset());
     });

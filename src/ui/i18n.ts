@@ -6,11 +6,18 @@ export interface TranslationStrings {
   menuTagline: string;
   btnPlay: string;
   btnMapSelect: string;
+  btnChessSkins: string;
   btnSettings: string;
   btnLanguage: string;
   btnCredits: string;
   btnSkipIntro: string;
   btnClose: string;
+
+  // Chess Skins
+  labelPieceSkin: string;
+  skinArcaneRoyalty: string;
+  skinRunicWarforged: string;
+  skinMysticSanctum: string;
 
   // Turn & Status
   whiteToMove: string;
@@ -133,6 +140,47 @@ export interface TranslationStrings {
   creditsCopyright: string;
   creditsTechTitle: string;
   creditsLicenseNotice: string;
+
+  // Online Private PvP
+  btnOnlinePvP: string;
+  onlineTitle: string;
+  onlineSubtitle: string;
+  tabCreateRoom: string;
+  tabJoinRoom: string;
+  labelHostColor: string;
+  factionRandom: string;
+  btnCreateRoomSubmit: string;
+  labelRoomCodeInput: string;
+  roomCodePlaceholder: string;
+  btnJoinRoomSubmit: string;
+  onlineWaitingTitle: string;
+  labelRoomCode: string;
+  btnCopyCode: string;
+  btnCopied: string;
+  labelInviteLink: string;
+  btnCopyInviteLink: string;
+  seatWhiteTitle: string;
+  seatBlackTitle: string;
+  seatYouConnected: string;
+  seatOpponentConnected: string;
+  seatWaitingOpponent: string;
+  seatReconnecting: string;
+  waitingForOpponentBanner: string;
+  bothPlayersReadyBanner: string;
+  btnEnterArena: string;
+  btnLeaveRoom: string;
+  btnResign: string;
+  resignationTitle: string;
+  onlineYouWhite: string;
+  onlineYouBlack: string;
+  onlineYourTurn: string;
+  onlineOpponentTurn: string;
+  onlineStatusWaiting: string;
+  onlineStatusConnected: string;
+  onlineStatusOpponentReconnecting: string;
+  onlineStatusReconnecting: string;
+  rematchWaitingOpponent: string;
+  rematchOpponentRequested: string;
 }
 
 const LANG_STORAGE_KEY = 'mochess_language_v2';
@@ -162,11 +210,17 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     menuTagline: 'Command living stone-and-gold armies across ancient medieval battle halls.',
     btnPlay: 'Play',
     btnMapSelect: 'Map Selection',
+    btnChessSkins: 'Chess Skins',
     btnSettings: 'Settings',
     btnLanguage: 'Language',
     btnCredits: 'Credits',
     btnSkipIntro: 'Skip Intro',
     btnClose: 'Close',
+
+    labelPieceSkin: 'Chess Piece Skin (3D Sculpted Set)',
+    skinArcaneRoyalty: 'Arcane Royalty',
+    skinRunicWarforged: 'Runic Warforged',
+    skinMysticSanctum: 'Mystic Sanctum',
 
     whiteToMove: 'White to Move',
     blackToMove: 'Black to Move',
@@ -241,7 +295,7 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     qualityMedium: 'Medium',
     qualityHigh: 'High',
     settingVolume: 'Master Audio Volume',
-    settingMusic: 'Ambient Cathedral Music',
+    settingMusic: 'Map Background Music',
     settingSfx: 'Battle Sound Effects (SFX)',
     settingCamSensitivity: 'Camera & Zoom Sensitivity',
     settingMagicalFx: 'Combat FX & Fire Particles',
@@ -289,7 +343,47 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     creditsCopyright: '© 2026 Dimas Mong. Licensed under the MIT License.',
     creditsTechTitle: 'Open-Source Attribution & Stack',
     creditsLicenseNotice:
-      'Powered by Three.js (MIT), chess.js (BSD-2-Clause), TypeScript (Apache-2.0), Vite (MIT), and Blender 3D Pipeline.'
+      'Powered by Three.js (MIT), chess.js (BSD-2-Clause), TypeScript (Apache-2.0), Vite (MIT), and Blender 3D Pipeline.',
+
+    btnOnlinePvP: 'Online PvP',
+    onlineTitle: 'Online Private PvP — Arcane Sanctuary',
+    onlineSubtitle: 'Create a private 1v1 battle room or join a friend via room code or invite link.',
+    tabCreateRoom: 'Create Private Room',
+    tabJoinRoom: 'Join Private Room',
+    labelHostColor: 'Your Faction',
+    factionRandom: 'Random',
+    btnCreateRoomSubmit: 'Create Private Room',
+    labelRoomCodeInput: 'Enter 6-Character Room Code',
+    roomCodePlaceholder: 'e.g. ARC7K9',
+    btnJoinRoomSubmit: 'Join Private Room',
+    onlineWaitingTitle: 'Private Room Lobby',
+    labelRoomCode: 'Private Room Code',
+    btnCopyCode: 'Copy Code',
+    btnCopied: 'Copied!',
+    labelInviteLink: 'Shareable Invitation Link',
+    btnCopyInviteLink: 'Copy Invite Link',
+    seatWhiteTitle: 'White & Gold Seat',
+    seatBlackTitle: 'Black & Gold Seat',
+    seatYouConnected: 'You • Connected',
+    seatOpponentConnected: 'Opponent • Connected',
+    seatWaitingOpponent: 'Waiting for Player...',
+    seatReconnecting: 'Reconnecting...',
+    waitingForOpponentBanner: 'Waiting for opponent to join room... Share the code or invite link above.',
+    bothPlayersReadyBanner: 'Both commanders have joined! Entering battle arena...',
+    btnEnterArena: 'Enter Battle Arena',
+    btnLeaveRoom: 'Leave Room',
+    btnResign: 'Resign',
+    resignationTitle: 'RESIGNATION',
+    onlineYouWhite: 'Online PvP • You: White',
+    onlineYouBlack: 'Online PvP • You: Black',
+    onlineYourTurn: 'Your Turn',
+    onlineOpponentTurn: "Opponent's Turn",
+    onlineStatusWaiting: 'Waiting for Opponent',
+    onlineStatusConnected: 'Connected',
+    onlineStatusOpponentReconnecting: 'Opponent Reconnecting...',
+    onlineStatusReconnecting: 'Reconnecting...',
+    rematchWaitingOpponent: 'Rematch requested — waiting for opponent...',
+    rematchOpponentRequested: 'Opponent requested a rematch! Click Rematch to accept.'
   },
   id: {
     brandTitle: 'CATUR PENYIHIR',
@@ -297,11 +391,17 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     menuTagline: 'Pimpin pasukan batu-dan-emas hidup di aula pertempuran abad pertengahan kuno.',
     btnPlay: 'Main Sekarang',
     btnMapSelect: 'Pilihan Peta',
+    btnChessSkins: 'Skin Bidak',
     btnSettings: 'Pengaturan',
     btnLanguage: 'Bahasa',
     btnCredits: 'Kredit',
     btnSkipIntro: 'Lewati Intro',
     btnClose: 'Tutup',
+
+    labelPieceSkin: 'Skin Bidak Catur (Set 3D)',
+    skinArcaneRoyalty: 'Royalti Arkana',
+    skinRunicWarforged: 'Tempa-Rune',
+    skinMysticSanctum: 'Sanktum Mistis',
 
     whiteToMove: 'Giliran Putih',
     blackToMove: 'Giliran Hitam',
@@ -376,7 +476,7 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     qualityMedium: 'Sedang',
     qualityHigh: 'Tinggi',
     settingVolume: 'Volume Audio Utama',
-    settingMusic: 'Musik Ambien Katedral',
+    settingMusic: 'Musik Latar Peta',
     settingSfx: 'Efek Suara Pertempuran (SFX)',
     settingCamSensitivity: 'Sensitivitas Kamera & Zoom',
     settingMagicalFx: 'Efek Tempur & Partikel Api',
@@ -424,7 +524,47 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     creditsCopyright: '© 2026 Dimas Mong. Dilinsensikan di bawah Lisensi MIT.',
     creditsTechTitle: 'Atribusi Open-Source & Teknologi',
     creditsLicenseNotice:
-      'Didukung oleh Three.js (MIT), chess.js (BSD-2-Clause), TypeScript (Apache-2.0), Vite (MIT), dan Pipeline 3D Blender.'
+      'Didukung oleh Three.js (MIT), chess.js (BSD-2-Clause), TypeScript (Apache-2.0), Vite (MIT), dan Pipeline 3D Blender.',
+
+    btnOnlinePvP: 'PvP Online',
+    onlineTitle: 'PvP Privat Online — Sanktuari Arkana',
+    onlineSubtitle: 'Buat ruang tanding 1v1 privat atau bergabung dengan teman melalui kode ruang atau tautan undangan.',
+    tabCreateRoom: 'Buat Ruang Privat',
+    tabJoinRoom: 'Gabung Ruang Privat',
+    labelHostColor: 'Faksi Anda',
+    factionRandom: 'Acak',
+    btnCreateRoomSubmit: 'Buat Ruang Privat',
+    labelRoomCodeInput: 'Masukkan 6 Karakter Kode Ruang',
+    roomCodePlaceholder: 'cth. ARC7K9',
+    btnJoinRoomSubmit: 'Gabung Ruang Privat',
+    onlineWaitingTitle: 'Lobi Ruang Privat',
+    labelRoomCode: 'Kode Ruang Privat',
+    btnCopyCode: 'Salin Kode',
+    btnCopied: 'Tersalin!',
+    labelInviteLink: 'Tautan Undangan',
+    btnCopyInviteLink: 'Salin Tautan',
+    seatWhiteTitle: 'Kursi Putih & Emas',
+    seatBlackTitle: 'Kursi Hitam & Emas',
+    seatYouConnected: 'Anda • Terhubung',
+    seatOpponentConnected: 'Lawan • Terhubung',
+    seatWaitingOpponent: 'Menunggu Pemain...',
+    seatReconnecting: 'Menyambung Ulang...',
+    waitingForOpponentBanner: 'Menunggu lawan bergabung... Bagikan kode atau tautan undangan di atas.',
+    bothPlayersReadyBanner: 'Kedua komandan telah bergabung! Memasuki arena pertempuran...',
+    btnEnterArena: 'Masuk Arena Pertempuran',
+    btnLeaveRoom: 'Keluar Ruang',
+    btnResign: 'Menyerah',
+    resignationTitle: 'MENYERAH',
+    onlineYouWhite: 'PvP Online • Anda: Putih',
+    onlineYouBlack: 'PvP Online • Anda: Hitam',
+    onlineYourTurn: 'Giliran Anda',
+    onlineOpponentTurn: 'Giliran Lawan',
+    onlineStatusWaiting: 'Menunggu Lawan',
+    onlineStatusConnected: 'Terhubung',
+    onlineStatusOpponentReconnecting: 'Lawan Menyambung Ulang...',
+    onlineStatusReconnecting: 'Menyambung Ulang...',
+    rematchWaitingOpponent: 'Tanding ulang diminta — menunggu lawan...',
+    rematchOpponentRequested: 'Lawan meminta tanding ulang! Klik Tanding Ulang untuk menerima.'
   }
 };
 

@@ -10,7 +10,9 @@ import type {
   LegalDestination,
   MapId,
   MoveExecutionResult,
-  MoveRecord
+  MoveRecord,
+  PieceSkinId,
+  PublicRoomView
 } from './types';
 
 const STORAGE_KEY = 'mochess_arcane_kingdom_state_v1';
@@ -53,7 +55,8 @@ export class ChessGameEngine {
       playerColor: initialConfig?.playerColor ?? 'w',
       aiDifficulty: initialConfig?.aiDifficulty ?? 'knight',
       timeControlMinutes: initialConfig?.timeControlMinutes ?? 10,
-      mapId: initialConfig?.mapId ?? 'cathedral'
+      mapId: initialConfig?.mapId ?? 'cathedral',
+      skinId: initialConfig?.skinId ?? 'arcane_royalty'
     };
     const initialMs = this.config.timeControlMinutes * 60 * 1000;
     this.clock = {
@@ -86,6 +89,11 @@ export class ChessGameEngine {
 
   public setMap(mapId: MapId): void {
     this.config.mapId = mapId;
+    this.emit();
+  }
+
+  public setSkin(skinId: PieceSkinId): void {
+    this.config.skinId = skinId;
     this.emit();
   }
 
@@ -257,7 +265,7 @@ export class ChessGameEngine {
   }
 
   public selectSquare(square: Square | null): LegalDestination[] {
-    if (!square || this.isGameOver()) {
+    if (!square || this.isGameOver() || (this.config.mode === 'online' && !this.isHumanTurn())) {
       this.selectedSquare = null;
       this.legalDestinations = [];
       this.emit();
@@ -285,7 +293,7 @@ export class ChessGameEngine {
    * - Otherwise clears selection without mutating game state.
    */
   public handleSquareInteraction(square: Square): MoveExecutionResult | { action: 'selected' | 'deselected'; destinations: LegalDestination[] } {
-    if (this.isGameOver()) {
+    if (this.isGameOver() || (this.config.mode === 'online' && !this.isHumanTurn())) {
       return { action: 'deselected', destinations: [] };
     }
 
@@ -590,9 +598,129 @@ export class ChessGameEngine {
     };
   }
 
+  /**
+   * Synchronizes the local rules engine with an authoritative Online PvP room state.
+   * Returns any newly applied MoveRecord so the caller can play sound effects / animations.
+   */
+  public syncFromOnlineRoom(room: PublicRoomView, playerColor: Color): MoveRecord | undefined {
+    const prevMode = this.config.mode;
+    const prevColor = this.config.playerColor;
+    const prevRoomCode = this.config.onlineRoomCode;
+    const prevMap = this.config.mapId;
+
+    this.config = {
+      ...this.config,
+      mode: 'online',
+      playerColor,
+      mapId: room.mapId,
+      timeControlMinutes: room.timeControlMinutes,
+      onlineRoomCode: room.roomCode
+    };
+
+    const configChanged =
+      prevMode !== 'online' ||
+      prevColor !== playerColor ||
+      prevRoomCode !== room.roomCode ||
+      prevMap !== room.mapId;
+
+    // 1. Check if the server room was reset for a rematch
+    if (room.moveHistory.length === 0 && (this.moveHistory.length > 0 || this.customResult !== null)) {
+      this.chess.reset();
+      this.moveHistory = [];
+      this.selectedSquare = null;
+      this.legalDestinations = [];
+      this.pendingPromotion = null;
+      this.customResult = null;
+      this.emit();
+      return undefined;
+    }
+
+    let animatedMove: MoveRecord | undefined;
+    let boardChanged = false;
+    const prevHistoryLen = this.moveHistory.length;
+
+    // 2. Check if 1 new move was played on top of our current state
+    if (
+      room.moveHistory.length === prevHistoryLen + 1 &&
+      room.moveHistory[room.moveHistory.length - 1].fenBefore === this.chess.fen()
+    ) {
+      const latest = room.moveHistory[room.moveHistory.length - 1];
+      try {
+        this.chess.move({
+          from: latest.from,
+          to: latest.to,
+          promotion: latest.promotion
+        });
+        this.moveHistory.push(latest);
+        this.selectedSquare = null;
+        this.legalDestinations = [];
+        this.pendingPromotion = null;
+        animatedMove = latest;
+        boardChanged = true;
+      } catch {
+        this.chess.load(room.fen);
+        this.moveHistory = [...room.moveHistory];
+        boardChanged = true;
+      }
+    } else if (
+      room.fen !== this.chess.fen() ||
+      room.moveHistory.length !== prevHistoryLen
+    ) {
+      // Full replay on reconnect / mid-game join / multi-ply catchup
+      this.chess.reset();
+      let replayed = true;
+      for (const rec of room.moveHistory) {
+        try {
+          this.chess.move({
+            from: rec.from,
+            to: rec.to,
+            promotion: rec.promotion
+          });
+        } catch {
+          replayed = false;
+          break;
+        }
+      }
+      if (!replayed || this.chess.fen() !== room.fen) {
+        this.chess.load(room.fen);
+      }
+      this.moveHistory = [...room.moveHistory];
+      this.selectedSquare = null;
+      this.legalDestinations = [];
+      this.pendingPromotion = null;
+      boardChanged = true;
+      if (room.moveHistory.length > prevHistoryLen) {
+        animatedMove = room.moveHistory[room.moveHistory.length - 1];
+      }
+    }
+
+    // 3. Synchronize custom result (e.g. resignation or timeout)
+    let resultChanged = false;
+    if (room.isGameOver && room.winner && (room.resultReason === 'resignation' || room.resultReason === 'timeout')) {
+      if (
+        !this.customResult ||
+        this.customResult.winner !== room.winner ||
+        this.customResult.reason !== room.resultReason
+      ) {
+        this.customResult = { winner: room.winner, reason: room.resultReason };
+        resultChanged = true;
+      }
+    } else if (!room.isGameOver && this.customResult !== null) {
+      this.customResult = null;
+      resultChanged = true;
+    }
+
+    if (boardChanged || animatedMove || configChanged || resultChanged) {
+      this.emit(animatedMove);
+    }
+
+    return animatedMove;
+  }
+
   public saveToStorage(): void {
     try {
       if (typeof window === 'undefined' || !window.localStorage) return;
+      if (this.config.mode === 'online') return;
       const payload = {
         fen: this.chess.fen(),
         moveHistory: this.moveHistory,

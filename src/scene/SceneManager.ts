@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { Color, GameStateSnapshot, MapId, MoveRecord, PieceSymbol, Square } from '../engine/types';
+import type {
+  Color,
+  GameStateSnapshot,
+  MapId,
+  MoveRecord,
+  PieceSkinId,
+  PieceSymbol,
+  Square
+} from '../engine/types';
 import { PieceAssetManager } from '../assets/PieceAssetManager';
 import type { QualityTier } from '../assets/ProceduralTextures';
 import { buildCastleArena, type ArenaElements } from './CastleArenaBuilder';
@@ -50,6 +58,8 @@ export class SceneManager {
   private activePlayerColor: Color = 'w';
   private currentPreset: CameraPreset = 'gameplay';
   private menuShowcaseActive = false;
+  private envTexture: THREE.Texture | null = null;
+  private lastSnapshot: GameStateSnapshot | null = null;
 
   private cameraTween: {
     startPos: THREE.Vector3;
@@ -87,8 +97,15 @@ export class SceneManager {
       typeof window !== 'undefined' &&
       (window.innerWidth < 768 || 'ontouchstart' in window || navigator.maxTouchPoints > 0);
 
+    const urlQuality =
+      typeof window !== 'undefined'
+        ? (new URLSearchParams(window.location.search).get('quality') as QualityTier | null)
+        : null;
+    const validQuality =
+      urlQuality && ['low', 'medium', 'high'].includes(urlQuality) ? urlQuality : null;
+
     this.settings = {
-      quality: initialSettings?.quality ?? (this.isMobile ? 'medium' : 'high'),
+      quality: initialSettings?.quality ?? validQuality ?? (this.isMobile ? 'medium' : 'high'),
       reducedMotion: initialSettings?.reducedMotion ?? false,
       magicalFx: initialSettings?.magicalFx ?? true,
       showCoordinates: initialSettings?.showCoordinates ?? false,
@@ -99,9 +116,13 @@ export class SceneManager {
     this.scene.background = new THREE.Color('#0c0907');
     this.scene.fog = new THREE.FogExp2('#0c0907', 0.022);
 
+    const initW = Math.max(1, container.clientWidth || window.innerWidth);
+    const initH = Math.max(1, container.clientHeight || window.innerHeight);
+    const initAspect = initW / initH;
+
     this.camera = new THREE.PerspectiveCamera(
-      38,
-      Math.max(1, container.clientWidth) / Math.max(1, container.clientHeight),
+      this.computeAspectFov(initAspect),
+      initAspect,
       0.1,
       80
     );
@@ -120,22 +141,19 @@ export class SceneManager {
     this.arena = buildCastleArena(
       this.settings.quality,
       this.isMobile,
-      !this.settings.reducedMotion && this.settings.magicalFx,
+      this.settings.quality !== 'low' && !this.settings.reducedMotion && this.settings.magicalFx,
       this.settings.quality !== 'low',
       this.currentMapId
     );
     this.scene.add(this.arena.group);
-    this.applyMapAtmosphere(this.currentMapId);
 
     this.piecesGroup = new THREE.Group();
     this.piecesGroup.name = 'ChessPiecesGroup';
     this.scene.add(this.piecesGroup);
 
     this.animController = new AnimationController(this.scene);
-    this.animController.setSettings({
-      reducedMotion: this.settings.reducedMotion,
-      magicalFxEnabled: this.settings.magicalFx
-    });
+    this.applyMapAtmosphere(this.currentMapId);
+    this.applyQualityTierSettings(false);
 
     // Default to centered strategic gameplay camera
     this.setCameraPreset('gameplay', true);
@@ -146,6 +164,26 @@ export class SceneManager {
     void this.assetManager.loadGLBAssets('./models/arcane_pieces.glb');
 
     this.startLoop();
+  }
+
+  private isPortraitViewport(): boolean {
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    return w < h;
+  }
+
+  /**
+   * Computes vertical FOV dynamically so that narrow portrait mobile screens (`aspect < 1.0`)
+   * preserve a wide enough horizontal FOV to fit all 64 squares and the outer rune frame without cropping.
+   */
+  private computeAspectFov(aspect: number): number {
+    if (aspect >= 1.0) {
+      return 38;
+    }
+    // Scale vertical FOV inversely with portrait aspect so horizontal FOV remains >= 35 degrees
+    const targetHalfTan = 0.34 / Math.max(0.38, aspect);
+    const vFovDeg = (2 * Math.atan(targetHalfTan) * 180) / Math.PI;
+    return Math.min(72, Math.max(44, vFovDeg));
   }
 
   public setOnCinematicStateChange(cb: (active: boolean) => void): void {
@@ -171,13 +209,14 @@ export class SceneManager {
     this.renderer.toneMappingExposure = 0.96;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // Subtle physically based environment reflection (kept low at 0.36 to prevent harsh glare on the board)
+    // Subtle physically based environment reflection (disabled in Low quality mode)
     try {
       const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
       pmremGenerator.compileEquirectangularShader();
-      const envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-      this.scene.environment = envTexture;
-      this.scene.environmentIntensity = 0.36;
+      this.envTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+      this.scene.environment = this.settings.quality === 'low' ? null : this.envTexture;
+      this.scene.environmentIntensity =
+        this.settings.quality === 'high' ? 0.36 : this.settings.quality === 'medium' ? 0.22 : 0.0;
       pmremGenerator.dispose();
     } catch {
       // Fallback if PMREM fails on constrained drivers
@@ -279,10 +318,118 @@ export class SceneManager {
     this.chessboard.setMapTheme(mapId);
     this.assetManager.applyMapTheme(mapId);
     this.applyMapAtmosphere(mapId);
+    this.applyQualityTierSettings(false);
   }
 
   public getMap(): MapId {
     return this.currentMapId;
+  }
+
+  /**
+   * Switches the active 3D Chess Piece Skin (`arcane_royalty`, `runic_warforged`, `mystic_sanctum`)
+   * and immediately rebuilds all pieces on the board with their distinct 3D silhouettes.
+   */
+  public setPieceSkin(skinId: PieceSkinId): void {
+    if (this.assetManager.getSkin() === skinId) return;
+    this.assetManager.setSkin(skinId);
+    if (this.lastSnapshot) {
+      this.rebuildAllPieces(this.lastSnapshot);
+    }
+  }
+
+  public getPieceSkin(): PieceSkinId {
+    return this.assetManager.getSkin();
+  }
+
+  /**
+   * Applies real, noticeable visual and performance differences between `low`, `medium`, and `high` graphics modes.
+   */
+  private applyQualityTierSettings(rebuildArenaAndPieces = true): void {
+    const q = this.settings.quality;
+    const isLow = q === 'low';
+    const isMed = q === 'medium';
+
+    // 1. Pixel ratio & tone mapping
+    const maxDpr = isLow ? 1.0 : isMed ? 1.35 : 2.0;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    this.renderer.toneMapping = isLow ? THREE.LinearToneMapping : THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = isLow ? 0.88 : isMed ? 0.94 : 0.98;
+
+    // 2. Environment reflections (disabled completely in Low mode)
+    this.scene.environment = isLow ? null : this.envTexture;
+    this.scene.environmentIntensity = isLow ? 0.0 : isMed ? 0.22 : 0.38;
+
+    // 3. Shadows & secondary directional lights
+    this.renderer.shadowMap.enabled = !isLow;
+    this.keyLight.castShadow = !isLow;
+    if (!isLow) {
+      const shadowSize = q === 'high' && !this.isMobile ? 2048 : 1024;
+      if (this.keyLight.shadow.mapSize.x !== shadowSize) {
+        this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
+        this.keyLight.shadow.map?.dispose();
+        this.keyLight.shadow.map = null;
+      }
+    }
+    this.rimLight.visible = !isLow;
+    this.topFill.visible = q === 'high';
+
+    if (isLow) {
+      // Slightly stronger ambient hemisphere in Low mode to compensate for disabled point lights & rim lights
+      this.hemiLight.intensity = 0.82;
+      this.keyLight.intensity = 1.75;
+    } else {
+      this.applyMapAtmosphere(this.currentMapId);
+    }
+
+    // 4. Update Chessboard & Piece Materials
+    this.chessboard.setQuality(q);
+    this.assetManager.setQuality(q);
+
+    // 5. Combat FX & Particle settings (disabled in Low mode)
+    const fxActive = !isLow && !this.settings.reducedMotion && this.settings.magicalFx;
+    this.animController.setSettings({
+      reducedMotion: this.settings.reducedMotion,
+      magicalFxEnabled: fxActive
+    });
+
+    if (rebuildArenaAndPieces) {
+      this.scene.remove(this.arena.group);
+      this.arena = buildCastleArena(
+        q,
+        this.isMobile,
+        fxActive,
+        !isLow,
+        this.currentMapId
+      );
+      this.scene.add(this.arena.group);
+    }
+
+    // 6. Configure Brazier Fire Layers, Point Lights, Sparks & Ambient Embers per quality tier
+    if (this.arena.embers) {
+      this.arena.embers.visible = q === 'high' && fxActive;
+    }
+    for (const b of this.arena.braziers) {
+      if (b.light) {
+        b.light.visible = !isLow;
+      }
+      if (b.sparks) {
+        b.sparks.visible = !isLow && fxActive;
+      }
+      const maxLayers = isLow ? 2 : isMed ? 4 : 8;
+      b.flameLayers.forEach((layer, idx) => {
+        layer.visible = idx < maxLayers;
+      });
+    }
+    for (const c of this.arena.floatingCrystals) {
+      const ring = c.mesh.getObjectByName('astrolabe_ring');
+      if (ring) {
+        ring.visible = !isLow;
+      }
+    }
+
+    if (rebuildArenaAndPieces && this.lastSnapshot) {
+      this.rebuildAllPieces(this.lastSnapshot);
+    }
   }
 
   private initControls(): void {
@@ -302,9 +449,11 @@ export class SceneManager {
   private applyGameplayControlBounds(preset: CameraPreset): void {
     if (!this.controls) return;
 
-    // Safe zoom bounds: walls are at ±14.8 and pillars at ±13.6; maxDistance 13.8 keeps camera strictly inside pillars
+    const isPortrait = this.isPortraitViewport();
+
+    // Safe zoom bounds: on portrait mobile, allow zooming out to 19.8 so the entire 64-square board + rune frame fits horizontally
     this.controls.minDistance = 6.8;
-    this.controls.maxDistance = 14.2;
+    this.controls.maxDistance = isPortrait ? 19.8 : 14.2;
 
     if (preset === 'gameplay' || preset === 'top') {
       // High-angle / top-down strategic chess view bounds
@@ -312,7 +461,6 @@ export class SceneManager {
       this.controls.maxPolarAngle = 0.72; // ~41 deg max tilt so board stays comfortable & centered
 
       // Lock horizontal rotation within ±18 degrees around the active player's side
-      const baseAzimuth = this.activePlayerColor === 'w' ? 0 : Math.PI;
       const azimuthAllowance = 0.32;
       if (this.activePlayerColor === 'w') {
         this.controls.minAzimuthAngle = -azimuthAllowance;
@@ -328,7 +476,7 @@ export class SceneManager {
       this.controls.maxPolarAngle = Math.PI * 0.43;
       this.controls.minAzimuthAngle = -Infinity;
       this.controls.maxAzimuthAngle = Infinity;
-      this.controls.maxDistance = 12.2;
+      this.controls.maxDistance = isPortrait ? 16.5 : 12.2;
     }
   }
 
@@ -399,6 +547,60 @@ export class SceneManager {
    * - `cinematic`: Low three-quarter dramatic showcase perspective
    * - `white` / `black`: Low perspective behind White or Black army
    */
+  /**
+   * Computes the target camera position and look-at target for a given preset,
+   * using a dedicated Mobile Full-Board Gameplay Camera when in portrait orientation (`aspect < 1.0`).
+   */
+  private getPresetTransform(
+    preset: CameraPreset,
+    playerColor: Color = this.activePlayerColor
+  ): { endPos: THREE.Vector3; endTarget: THREE.Vector3 } {
+    const zSign = playerColor === 'w' ? 1 : -1;
+    const isPortrait = this.isPortraitViewport();
+
+    switch (preset) {
+      case 'gameplay':
+        if (isPortrait) {
+          // Dedicated Mobile Portrait Gameplay Camera: higher & slightly steeper top-down angle
+          // so all 64 squares and the outer rune frame are 100% visible horizontally with safe HUD margins
+          return {
+            endPos: new THREE.Vector3(0, 16.6, 5.2 * zSign),
+            endTarget: new THREE.Vector3(0, -0.1, 0)
+          };
+        }
+        return {
+          endPos: new THREE.Vector3(0, 10.8, 5.4 * zSign),
+          endTarget: new THREE.Vector3(0, 0, 0)
+        };
+      case 'top':
+        if (isPortrait) {
+          return {
+            endPos: new THREE.Vector3(0, 18.2, 0.35 * zSign),
+            endTarget: new THREE.Vector3(0, 0, 0)
+          };
+        }
+        return {
+          endPos: new THREE.Vector3(0, 14.0, 0.25 * zSign),
+          endTarget: new THREE.Vector3(0, 0, 0)
+        };
+      case 'cinematic':
+        return {
+          endPos: new THREE.Vector3(2.68, 2.24, -4.38),
+          endTarget: new THREE.Vector3(-0.32, 0.52, 1.32)
+        };
+      case 'black':
+        return {
+          endPos: new THREE.Vector3(-1.35, 2.15, -5.55),
+          endTarget: new THREE.Vector3(0, 0.65, 1.2)
+        };
+      case 'white':
+        return {
+          endPos: new THREE.Vector3(-2.45, 2.45, 5.35),
+          endTarget: new THREE.Vector3(0, 0.52, -1.1)
+        };
+    }
+  }
+
   public setCameraPreset(preset: CameraPreset, immediate = false, playerColor?: Color): void {
     if (playerColor) {
       this.activePlayerColor = playerColor;
@@ -410,36 +612,7 @@ export class SceneManager {
     }
 
     this.currentPreset = preset;
-    let endPos: THREE.Vector3;
-    let endTarget: THREE.Vector3;
-
-    const zSign = this.activePlayerColor === 'w' ? 1 : -1;
-
-    switch (preset) {
-      case 'gameplay':
-        // Centered high-angle strategic chess camera (~26° from vertical, board perfectly centered)
-        endPos = new THREE.Vector3(0, 10.8, 5.4 * zSign);
-        endTarget = new THREE.Vector3(0, 0, 0);
-        break;
-      case 'top':
-        // Pure centered top-down view showing the full board frame and both fire braziers
-        endPos = new THREE.Vector3(0, 14.0, 0.25 * zSign);
-        endTarget = new THREE.Vector3(0, 0, 0);
-        break;
-      case 'cinematic':
-        // Dramatic low three-quarter perspective across the board
-        endPos = new THREE.Vector3(2.68, 2.24, -4.38);
-        endTarget = new THREE.Vector3(-0.32, 0.52, 1.32);
-        break;
-      case 'black':
-        endPos = new THREE.Vector3(-1.35, 2.15, -5.55);
-        endTarget = new THREE.Vector3(0, 0.65, 1.2);
-        break;
-      case 'white':
-        endPos = new THREE.Vector3(-2.45, 2.45, 5.35);
-        endTarget = new THREE.Vector3(0, 0.52, -1.1);
-        break;
-    }
+    const { endPos, endTarget } = this.getPresetTransform(preset, this.activePlayerColor);
 
     if (immediate || this.settings.reducedMotion) {
       this.cameraTween = null;
@@ -484,9 +657,13 @@ export class SceneManager {
    * Synchronizes the 3D pieces and board highlights with the authoritative `GameStateSnapshot`.
    */
   public syncWithSnapshot(snapshot: GameStateSnapshot, lastMove?: MoveRecord): void {
+    this.lastSnapshot = snapshot;
     this.activePlayerColor = snapshot.config.playerColor;
     if (snapshot.config.mapId && snapshot.config.mapId !== this.currentMapId) {
       this.setMap(snapshot.config.mapId);
+    }
+    if (snapshot.config.skinId && snapshot.config.skinId !== this.assetManager.getSkin()) {
+      this.assetManager.setSkin(snapshot.config.skinId);
     }
 
     this.chessboard.updateHighlights(
@@ -602,22 +779,29 @@ export class SceneManager {
     const prevQuality = this.settings.quality;
     this.settings = { ...this.settings, ...partial };
     this.chessboard.setCoordinatesVisible(this.settings.showCoordinates);
-    this.animController.setSettings({
-      reducedMotion: this.settings.reducedMotion,
-      magicalFxEnabled: this.settings.magicalFx
-    });
+
     if (this.controls) {
       this.controls.rotateSpeed = 0.55 * this.settings.cameraSensitivity;
       this.controls.zoomSpeed = 0.85 * this.settings.cameraSensitivity;
     }
-    if (this.arena.embers) {
-      this.arena.embers.visible = !this.settings.reducedMotion && this.settings.magicalFx;
-    }
+
     if (partial.quality && partial.quality !== prevQuality) {
-      const maxDpr = this.settings.quality === 'high' ? 2.0 : this.settings.quality === 'medium' ? 1.5 : 1.0;
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
-      this.renderer.shadowMap.enabled = this.settings.quality !== 'low';
-      this.keyLight.castShadow = this.settings.quality !== 'low';
+      this.applyQualityTierSettings(true);
+    } else {
+      const fxActive =
+        this.settings.quality !== 'low' && !this.settings.reducedMotion && this.settings.magicalFx;
+      this.animController.setSettings({
+        reducedMotion: this.settings.reducedMotion,
+        magicalFxEnabled: fxActive
+      });
+      if (this.arena.embers) {
+        this.arena.embers.visible = this.settings.quality === 'high' && fxActive;
+      }
+      for (const b of this.arena.braziers) {
+        if (b.sparks) {
+          b.sparks.visible = fxActive;
+        }
+      }
     }
   }
 
@@ -736,9 +920,22 @@ export class SceneManager {
     if (w === 0 || h === 0) return;
     const aspect = w / h;
     this.camera.aspect = aspect;
-    this.camera.fov = aspect < 1.0 ? Math.min(58, 38 / Math.pow(aspect, 0.48)) : 38;
+    this.camera.fov = this.computeAspectFov(aspect);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    this.applyGameplayControlBounds(this.currentPreset);
+
+    if (
+      !this.openingCinematic &&
+      !this.menuShowcaseActive &&
+      !this.cameraTween &&
+      (this.currentPreset === 'gameplay' || this.currentPreset === 'top')
+    ) {
+      const { endPos, endTarget } = this.getPresetTransform(this.currentPreset, this.activePlayerColor);
+      this.camera.position.copy(endPos);
+      this.controls.target.copy(endTarget);
+      this.controls.update();
+    }
   };
 
   private startLoop(): void {
@@ -791,11 +988,13 @@ export class SceneManager {
           const easeS = 1 - Math.pow(1 - s, 3);
           const endAngle = zSign > 0 ? 0.52 : -2.62;
           const p1 = new THREE.Vector3(Math.sin(endAngle) * 5.35, 3.03, Math.cos(endAngle) * 5.35);
-          const pEnd = new THREE.Vector3(0, 10.8, 5.4 * zSign);
+          const { endPos: pEnd, endTarget: tEnd } = this.getPresetTransform(
+            'gameplay',
+            this.openingCinematic.playerColor
+          );
           this.camera.position.lerpVectors(p1, pEnd, easeS);
 
           const t1 = new THREE.Vector3(0, 0.38, 0);
-          const tEnd = new THREE.Vector3(0, 0, 0);
           this.controls.target.lerpVectors(t1, tEnd, easeS);
         }
         this.camera.lookAt(this.controls.target);

@@ -48,13 +48,17 @@ export class ChessboardBuilder {
   private readonly sigilSelectedTex: THREE.Texture;
   private readonly sigilCheckTex: THREE.Texture;
 
-  private readonly texSize: number;
+  private texSize: number;
   private readonly isMobile: boolean;
+  private quality: QualityTier;
+  private currentMap: MapId;
 
   constructor(quality: QualityTier = 'high', isMobile = false, initialMap: MapId = 'cathedral') {
     this.group = new THREE.Group();
     this.group.name = 'WizardChessBoard';
     this.isMobile = isMobile;
+    this.quality = quality;
+    this.currentMap = initialMap;
     this.texSize = getAdaptiveTextureSize(quality, isMobile);
 
     this.highlightGroup = new THREE.Group();
@@ -172,20 +176,98 @@ export class ChessboardBuilder {
     this.sigilCheckTex = createArcaneSigilTexture('check');
 
     this.group.add(this.highlightGroup);
+    this.applyQualityMaterialSettings();
+  }
+
+  public setQuality(quality: QualityTier): void {
+    if (this.quality === quality) return;
+    this.quality = quality;
+    this.texSize = getAdaptiveTextureSize(quality, this.isMobile);
+    this.setMapTheme(this.currentMap);
+    this.applyQualityMaterialSettings();
+  }
+
+  private applyQualityMaterialSettings(): void {
+    if (this.quality === 'low') {
+      // True Low Graphics Mode: completely non-reflective matte board & frame, zero clearcoat, zero envMap
+      this.lightTileMat.roughness = 0.96;
+      this.lightTileMat.metalness = 0.0;
+      this.lightTileMat.clearcoat = 0.0;
+      this.lightTileMat.envMapIntensity = 0.0;
+
+      this.darkTileMat.roughness = 0.94;
+      this.darkTileMat.metalness = 0.0;
+      this.darkTileMat.clearcoat = 0.0;
+      this.darkTileMat.envMapIntensity = 0.0;
+
+      this.runeFrameMat.roughness = 0.95;
+      this.runeFrameMat.metalness = 0.0;
+      this.runeFrameMat.clearcoat = 0.0;
+      this.runeFrameMat.envMapIntensity = 0.0;
+
+      this.goldTrimMat.roughness = 0.65;
+      this.goldTrimMat.metalness = 0.35;
+      this.goldTrimMat.envMapIntensity = 0.0;
+    } else if (this.quality === 'medium') {
+      this.lightTileMat.roughness = 0.54;
+      this.lightTileMat.metalness = 0.02;
+      this.lightTileMat.clearcoat = 0.05;
+      this.lightTileMat.envMapIntensity = 0.22;
+
+      this.darkTileMat.roughness = 0.50;
+      this.darkTileMat.metalness = 0.06;
+      this.darkTileMat.clearcoat = 0.06;
+      this.darkTileMat.envMapIntensity = 0.22;
+
+      this.runeFrameMat.roughness = 0.48;
+      this.runeFrameMat.metalness = 0.08;
+      this.runeFrameMat.clearcoat = 0.08;
+      this.runeFrameMat.envMapIntensity = 0.22;
+
+      this.goldTrimMat.roughness = 0.36;
+      this.goldTrimMat.metalness = 0.80;
+      this.goldTrimMat.envMapIntensity = 0.24;
+    } else {
+      // High Graphics Mode: rich polished stone with subtle reflections
+      this.lightTileMat.roughness = 0.38;
+      this.lightTileMat.metalness = 0.03;
+      this.lightTileMat.clearcoat = 0.14;
+      this.lightTileMat.envMapIntensity = 0.38;
+
+      this.darkTileMat.roughness = 0.34;
+      this.darkTileMat.metalness = 0.10;
+      this.darkTileMat.clearcoat = 0.18;
+      this.darkTileMat.envMapIntensity = 0.42;
+
+      this.runeFrameMat.roughness = 0.32;
+      this.runeFrameMat.metalness = 0.12;
+      this.runeFrameMat.clearcoat = 0.18;
+      this.runeFrameMat.envMapIntensity = 0.38;
+
+      this.goldTrimMat.roughness = 0.28;
+      this.goldTrimMat.metalness = 0.88;
+      this.goldTrimMat.envMapIntensity = 0.40;
+    }
+
+    this.lightTileMat.needsUpdate = true;
+    this.darkTileMat.needsUpdate = true;
+    this.runeFrameMat.needsUpdate = true;
+    this.goldTrimMat.needsUpdate = true;
   }
 
   /**
-   * Updates the chessboard's marble tiles, metallic trim, and 2K outer frame texture for the selected map.
+   * Updates the chessboard's marble tiles, metallic trim, and outer frame texture for the selected map.
    */
   public setMapTheme(mapId: MapId): void {
-    const res = Math.min(512, this.texSize);
+    this.currentMap = mapId;
+    const res = this.quality === 'low' ? 128 : Math.min(512, this.texSize);
     const whiteMarble = createMarbleTextures('white', res, mapId);
     const blackMarble = createMarbleTextures('black', res, mapId);
 
     this.lightTileMat.map = whiteMarble.map;
-    this.lightTileMat.roughnessMap = whiteMarble.roughnessMap;
+    this.lightTileMat.roughnessMap = this.quality === 'low' ? null : whiteMarble.roughnessMap;
     this.darkTileMat.map = blackMarble.map;
-    this.darkTileMat.roughnessMap = blackMarble.roughnessMap;
+    this.darkTileMat.roughnessMap = this.quality === 'low' ? null : blackMarble.roughnessMap;
 
     if (mapId === 'cathedral') {
       this.lightTileMat.color.set('#dfd7c8');
@@ -201,7 +283,8 @@ export class ChessboardBuilder {
       this.goldTrimMat.color.set('#cfa842');
     }
 
-    const frameTex = createRuneBoardFrameTexture(this.isMobile ? 1024 : 2048, mapId);
+    const frameRes = this.quality === 'low' ? 512 : this.isMobile || this.quality === 'medium' ? 1024 : 2048;
+    const frameTex = createRuneBoardFrameTexture(frameRes, mapId);
     this.runeFrameMat.map = frameTex;
 
     this.lightTileMat.needsUpdate = true;

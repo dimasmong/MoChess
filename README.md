@@ -111,9 +111,27 @@ All screenshots below are genuine captures taken directly from the running WebGL
 > **Accidental Input Protection**: Any pointer drag exceeding `6px` or multi-touch gesture is classified as a camera adjustment and will never accidentally select or move a chess piece.
 
 ### Available Game Modes
+- **Online Private PvP (1v1 Room Multiplayer)**: Create a private room with a unique 6-character code and shareable invitation URL (`?room=XXXXXX`), or join a friend's room on Desktop or Android browsers—with authoritative server-side `chess.js` move validation, private participant tokens, disconnect/reconnect recovery, and two-player rematch handshakes.
 - **Single Player (Player vs AI)**: Choose **White & Gold** or **Black & Gold** against 4 AI difficulty ranks (`Novice`, `Knight`, `Archmage`, `Grandmaster`).
 - **Two Player (Local Pass & Play)**: Play Human vs Human on the same device.
 - **Time Controls**: `Unlimited`, `3m Blitz`, `5m Blitz`, or `10m Rapid`.
+
+---
+
+## 🌍 Online Private PvP Architecture (Vercel + Redis)
+
+MoChess is deployable as a **single Vercel project** (`https://mochess-arcane.vercel.app`) combining the Vite/Three.js frontend and the `/api/rooms` Serverless Function backend:
+
+- **Authoritative Server Validation (`api/rooms.ts` & `src/server/onlineRoomService.ts`)**:
+  - Every move (`{ roomCode, token, from, to, promotion? }`) is validated on the server using `new Chess(room.fen)`. Client-submitted board states are never trusted.
+  - **Private Seat Ownership**: White and Black seats are protected by cryptographically random participant tokens (`whiteToken` / `blackToken`) that are never exposed in public room views.
+  - **Atomic Compare-And-Swap (`CAS`) Updates**: Every state transition increments a monotonic `version` counter and commits via a Redis Lua `EVAL` Compare-And-Swap script (with 2-hour `EX 7200` room TTL) to prevent simultaneous-turn corruption.
+- **Managed Redis Integration (Vercel Marketplace)**:
+  - Automatically uses **Upstash for Redis / Vercel KV** (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or `KV_REST_API_URL` + `KV_REST_API_TOKEN`) or **Official Redis** (`REDIS_URL`) when connected via Vercel Marketplace, with an automatic atomic fallback store for zero-config local development (`npm run dev`) and testing.
+  - To attach managed Redis on Vercel:
+    ```bash
+    npx vercel integration add upstash/upstash-kv --billing-plan free --meta primaryRegion=sin1 --meta eviction=true --name mochess-redis
+    ```
 
 ---
 

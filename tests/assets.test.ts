@@ -4,7 +4,9 @@ import path from 'node:path';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPieceGeometryParts } from '../src/assets/PieceGeometryBuilder';
 import { PieceAssetManager } from '../src/assets/PieceAssetManager';
-import type { PieceSymbol } from '../src/engine/types';
+import { ChessboardBuilder } from '../src/scene/ChessboardBuilder';
+import { soundManager, MAP_MUSIC_TRACKS } from '../src/audio/SoundManager';
+import type { PieceSkinId, PieceSymbol } from '../src/engine/types';
 
 describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)', () => {
   const symbols: PieceSymbol[] = ['p', 'r', 'n', 'b', 'q', 'k'];
@@ -78,5 +80,65 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     expect(blackKnight.userData.square).toBe('g8');
     expect(blackKnight.userData.mixer).toBeDefined();
     expect(blackKnight.rotation.y).toBeCloseTo(0);
+  });
+
+  it('builds 3 distinct 3D sculpted chess skins (arcane_royalty, runic_warforged, mystic_sanctum) with different geometry shapes', () => {
+    const skins: PieceSkinId[] = ['arcane_royalty', 'runic_warforged', 'mystic_sanctum'];
+
+    for (const sym of symbols) {
+      const counts = skins.map((skin) => {
+        const parts = getPieceGeometryParts(sym, 'high', skin);
+        return (
+          parts.body.getAttribute('position').count +
+          parts.gold.getAttribute('position').count +
+          parts.steel.getAttribute('position').count
+        );
+      });
+      // Verify all 3 skins produce valid 3D meshes and differ in sculpted geometry vertex counts
+      expect(counts[0]).toBeGreaterThan(100);
+      expect(counts[1]).toBeGreaterThan(100);
+      expect(counts[2]).toBeGreaterThan(100);
+      expect(new Set(counts).size).toBe(3);
+    }
+  });
+
+  it('applies True Low Graphics Mode vs Medium and High on PieceAssetManager and ChessboardBuilder', () => {
+    const manager = new PieceAssetManager('low', true);
+    const whiteMat = manager.getMaterials('w');
+    expect(whiteMat.body.clearcoat).toBe(0);
+    expect(whiteMat.body.envMapIntensity).toBe(0);
+    expect(whiteMat.body.roughness).toBeGreaterThanOrEqual(0.85);
+
+    manager.setQuality('high');
+    expect(whiteMat.body.clearcoat).toBeGreaterThan(0.2);
+    expect(whiteMat.body.envMapIntensity).toBeGreaterThan(0.3);
+
+    const board = new ChessboardBuilder('low', true, 'cathedral');
+    const a1Mesh = board.tileMeshes.get('a1')!;
+    const darkMat = a1Mesh.material as any;
+    expect(darkMat.clearcoat).toBe(0);
+    expect(darkMat.envMapIntensity).toBe(0);
+    expect(darkMat.roughness).toBeGreaterThanOrEqual(0.9);
+
+    board.setQuality('high');
+    expect(darkMat.clearcoat).toBeGreaterThan(0.1);
+    expect(darkMat.envMapIntensity).toBeGreaterThan(0.3);
+  });
+
+  it('switches Map-Specific Music tracks automatically for cathedral, warhall, and sanctum and supports ON/OFF toggle', () => {
+    soundManager.setMusicEnabled(true);
+    soundManager.setMapMusic('cathedral');
+    expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.cathedral.trackId);
+
+    soundManager.setMapMusic('warhall');
+    expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.warhall.trackId);
+
+    soundManager.setMapMusic('sanctum');
+    expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.sanctum.trackId);
+
+    soundManager.setMusicEnabled(false);
+    expect(soundManager.getMusicStatus().enabled).toBe(false);
+    soundManager.setMusicEnabled(true);
+    expect(soundManager.getMusicStatus().enabled).toBe(true);
   });
 });
