@@ -695,8 +695,10 @@ body,
 .modal-card {
   width: 100%;
   max-width: 460px;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  max-height: calc(100vh - 28px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--bg-glass-strong);
   border: 1px solid var(--border-gold);
   border-radius: 12px;
@@ -704,37 +706,121 @@ body,
 }
 
 .modal-card-wide {
-  max-width: 720px;
+  max-width: 740px;
 }
 
 .modal-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .modal-header h2 {
   font-family: 'Cinzel', Georgia, serif;
-  font-size: 1.02rem;
+  font-size: 1.0rem;
   color: var(--gold-primary);
 }
 
 .modal-subtext {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .modal-body {
-  padding: 14px 18px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Map & Skin Selection Cards */
+/* Map & Skin Selection Spotlight Banner & Cards */
+.selection-spotlight-banner {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+  align-items: center;
+  background: linear-gradient(145deg, rgba(28, 22, 16, 0.92) 0%, rgba(12, 10, 14, 0.95) 100%);
+  border: 1px solid var(--border-gold);
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 0 18px rgba(230, 180, 76, 0.08);
+  flex-shrink: 0;
+}
+
+.spotlight-media-wrap {
+  position: relative;
+  height: 122px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(230, 180, 76, 0.42);
+  background: #0d0a0c;
+}
+
+.spotlight-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.spotlight-badge {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  right: 7px;
+  background: rgba(10, 8, 12, 0.84);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(230, 180, 76, 0.42);
+  color: var(--gold-bright);
+  font-size: 0.67rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spotlight-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px 6px;
+}
+
+.spotlight-kicker {
+  display: inline-flex;
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #161108;
+  background: linear-gradient(135deg, #f6d57a 0%, #c9942a 100%);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.spotlight-title {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--gold-bright);
+}
+
+.spotlight-desc {
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .map-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -752,7 +838,7 @@ body,
   color: var(--text-light);
   display: flex;
   flex-direction: column;
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .map-card:hover {
@@ -763,17 +849,28 @@ body,
 .map-card.active {
   border-color: var(--gold-bright);
   background: rgba(230, 180, 76, 0.14);
-  box-shadow: 0 0 22px rgba(230, 180, 76, 0.25);
+  box-shadow: 0 0 22px rgba(230, 180, 76, 0.28);
 }
 
 .map-card-preview {
-  height: 78px;
+  height: 108px;
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0d0a0c;
+}
+
+.card-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+.map-card:hover .card-preview-img {
+  transform: scale(1.04);
 }
 
 .preview-cathedral {
@@ -811,21 +908,47 @@ body,
 }
 
 .map-card-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
   font-family: 'Cinzel', Georgia, serif;
   font-size: 0.72rem;
   font-weight: 800;
   color: var(--gold-bright);
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(8, 6, 10, 0.78);
   border: 1px solid var(--border-gold);
   padding: 2px 8px;
   border-radius: 999px;
 }
 
+.card-selected-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #161108;
+  background: linear-gradient(135deg, #f6d57a 0%, #c9942a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  padding: 2px 9px;
+  border-radius: 999px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.65);
+}
+
+.map-card.active .card-selected-badge {
+  display: inline-flex;
+}
+
 .map-card-info {
-  padding: 12px;
+  padding: 8px 11px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .map-card-title {
@@ -835,9 +958,52 @@ body,
 }
 
 .map-card-desc {
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-size: 0.71rem;
+  line-height: 1.38;
   color: var(--text-muted);
+}
+
+/* Simplified Match Setup Card & Read-Only Loadout Summary */
+.lobby-card-compact {
+  max-width: 520px;
+}
+
+.lobby-loadout-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(230, 180, 76, 0.08);
+  border: 1px solid rgba(230, 180, 76, 0.28);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 2px;
+}
+
+.loadout-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.loadout-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.loadout-pill {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--gold-bright);
+  background: rgba(12, 10, 14, 0.82);
+  border: 1px solid var(--border-gold);
+  padding: 2px 9px;
+  border-radius: 999px;
 }
 
 .form-group {
@@ -880,10 +1046,11 @@ body,
 }
 
 .modal-footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1404,9 +1571,27 @@ body,
 
 /* Responsive adjustments for Mobile Portrait & Landscape */
 @media (max-width: 768px) {
+  .selection-spotlight-banner {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .spotlight-media-wrap {
+    height: 132px;
+  }
+
   .map-cards-grid,
   .online-seats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .map-card-preview {
+    height: 120px;
+  }
+
+  .lobby-loadout-summary {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .main-menu-overlay {

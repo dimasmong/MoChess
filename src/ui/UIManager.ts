@@ -14,12 +14,57 @@ import type {
 } from '../engine/types';
 import type { QualityTier } from '../assets/ProceduralTextures';
 import type { CameraPreset, SceneManager } from '../scene/SceneManager';
-import { soundManager } from '../audio/SoundManager';
+import { MAP_MUSIC_TRACKS, soundManager } from '../audio/SoundManager';
 import { getSavedLanguage, saveLanguage, TRANSLATIONS } from './i18n';
 import {
   onlineClient,
   type OnlineClientSnapshot
 } from '../online/OnlineMultiplayerClient';
+
+const MAP_STORAGE_KEY = 'mochess_selected_map_v1';
+const SKIN_STORAGE_KEY = 'mochess_selected_skin_v1';
+const VALID_MAPS: readonly MapId[] = ['cathedral', 'warhall', 'sanctum', 'classic'];
+const VALID_SKINS: readonly PieceSkinId[] = ['arcane_royalty', 'runic_warforged', 'mystic_sanctum', 'classic'];
+
+function loadSavedMapId(fallback: MapId = 'cathedral'): MapId {
+  try {
+    const raw = window.localStorage.getItem(MAP_STORAGE_KEY) as MapId | null;
+    if (raw && VALID_MAPS.includes(raw)) {
+      return raw;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function saveSelectedMapId(mapId: MapId): void {
+  try {
+    window.localStorage.setItem(MAP_STORAGE_KEY, mapId);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function loadSavedSkinId(fallback: PieceSkinId = 'arcane_royalty'): PieceSkinId {
+  try {
+    const raw = window.localStorage.getItem(SKIN_STORAGE_KEY) as PieceSkinId | null;
+    if (raw && VALID_SKINS.includes(raw)) {
+      return raw;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function saveSelectedSkinId(skinId: PieceSkinId): void {
+  try {
+    window.localStorage.setItem(SKIN_STORAGE_KEY, skinId);
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function formatClockMs(ms: number): string {
   const totalSec = Math.max(0, Math.ceil(ms / 1000));
@@ -112,6 +157,17 @@ export class UIManager {
     this.draftConfig = this.engine.getConfig();
     this.lang = getSavedLanguage();
 
+    // Restore persisted Arena Map & Chess Piece Skin from Main Menu selection
+    const savedMap = loadSavedMapId(this.draftConfig.mapId ?? 'cathedral');
+    const savedSkin = loadSavedSkinId(this.draftConfig.skinId ?? 'arcane_royalty');
+    this.draftConfig.mapId = savedMap;
+    this.draftConfig.skinId = savedSkin;
+    this.onlineMapId = savedMap;
+    this.engine.setMap(savedMap);
+    this.scene.setMap(savedMap);
+    this.engine.setSkin(savedSkin);
+    this.scene.setPieceSkin(savedSkin);
+
     this.scene.setOnCinematicStateChange((active) => {
       this.cinematicSkipBar.classList.toggle('hidden', !active);
       if (active) {
@@ -129,11 +185,12 @@ export class UIManager {
 
     this.bindUIEvents();
     this.applyTranslations();
-    this.syncSkinButtons(this.draftConfig.skinId ?? 'arcane_royalty');
+    this.syncSkinButtons(savedSkin);
     this.syncMapCards();
+    this.syncLobbyControlsWithDraft();
 
-    const initMap = this.draftConfig.mapId ?? 'cathedral';
-    soundManager.setMapMusic(initMap);
+    soundManager.setMapMusic(savedMap);
+    soundManager.setMenuMusicActive(this.isMainMenuVisible());
 
     const initQuality = this.scene.getSettings().quality;
     document.querySelectorAll('#select-quality .seg-btn').forEach((b) => {
@@ -145,11 +202,25 @@ export class UIManager {
     });
   }
 
+  public setArenaMap(mapId: MapId): void {
+    saveSelectedMapId(mapId);
+    this.draftConfig.mapId = mapId;
+    this.onlineMapId = mapId;
+    this.engine.setMap(mapId);
+    this.scene.setMap(mapId);
+    soundManager.setMapMusic(mapId);
+    this.syncMapCards();
+    this.syncLobbyControlsWithDraft();
+    this.syncOnlineControls();
+  }
+
   public setPieceSkin(skinId: PieceSkinId): void {
+    saveSelectedSkinId(skinId);
     this.draftConfig.skinId = skinId;
     this.engine.setSkin(skinId);
     this.scene.setPieceSkin(skinId);
     this.syncSkinButtons(skinId);
+    this.syncLobbyControlsWithDraft();
   }
 
   private getSkinDisplayName(skinId: PieceSkinId): string {
@@ -160,21 +231,56 @@ export class UIManager {
     return t.skinArcaneRoyalty;
   }
 
+  private getSkinDescription(skinId: PieceSkinId): string {
+    const t = TRANSLATIONS[this.lang];
+    if (skinId === 'runic_warforged') return t.skinRunicWarforgedDesc;
+    if (skinId === 'mystic_sanctum') return t.skinMysticSanctumDesc;
+    if (skinId === 'classic') return t.skinClassicDesc;
+    return t.skinArcaneRoyaltyDesc;
+  }
+
   private syncSkinButtons(skinId: PieceSkinId): void {
-    const selectors = [
-      '#select-menu-skin .seg-btn',
-      '#select-lobby-skin .seg-btn',
-      '#select-setting-skin .seg-btn',
-      '#skin-cards-grid .skin-card'
-    ];
-    for (const sel of selectors) {
-      document.querySelectorAll(sel).forEach((b) => {
-        b.classList.toggle('active', (b as HTMLElement).dataset.skin === skinId);
-      });
-    }
+    const t = TRANSLATIONS[this.lang];
+    document.querySelectorAll('#skin-cards-grid .skin-card').forEach((b) => {
+      const isSelected = (b as HTMLElement).dataset.skin === skinId;
+      b.classList.toggle('active', isSelected);
+      const badge = b.querySelector('.card-selected-badge');
+      if (badge) {
+        badge.textContent = t.badgeEquipped;
+      }
+    });
+
     const skinBadge = document.getElementById('menu-current-skin-badge');
     if (skinBadge) {
       skinBadge.textContent = this.getSkinDisplayName(skinId);
+    }
+
+    const lobbySummarySkin = document.getElementById('lobby-summary-skin');
+    if (lobbySummarySkin) {
+      lobbySummarySkin.textContent = this.getSkinDisplayName(skinId);
+    }
+
+    // Update Enlarged 3D Model Lineup Spotlight Banner in Skin Selection Modal
+    const spotlightImg = document.getElementById('skin-spotlight-img') as HTMLImageElement | null;
+    if (spotlightImg) {
+      spotlightImg.src = `./previews/skins/skin_${skinId}.png`;
+      spotlightImg.alt = `${this.getSkinDisplayName(skinId)} 3D Models Preview`;
+    }
+    const spotlightKicker = document.getElementById('skin-spotlight-kicker');
+    if (spotlightKicker) {
+      spotlightKicker.textContent = t.badgeEquipped;
+    }
+    const spotlightTitle = document.getElementById('skin-spotlight-title');
+    if (spotlightTitle) {
+      spotlightTitle.textContent = this.getSkinDisplayName(skinId);
+    }
+    const spotlightDesc = document.getElementById('skin-spotlight-desc');
+    if (spotlightDesc) {
+      spotlightDesc.textContent = this.getSkinDescription(skinId);
+    }
+    const lineupLegend = document.getElementById('skin-lineup-legend');
+    if (lineupLegend) {
+      lineupLegend.textContent = t.skinLineupLegend;
     }
   }
 
@@ -190,6 +296,7 @@ export class UIManager {
     this.updateFromSnapshot(this.engine.getSnapshot());
     this.syncLobbyControlsWithDraft();
     this.syncMapCards();
+    this.syncSkinButtons(this.draftConfig.skinId ?? this.engine.getConfig().skinId ?? 'arcane_royalty');
     this.syncOnlineControls();
     this.handleOnlineClientUpdate(onlineClient.getSnapshot());
   }
@@ -202,6 +309,7 @@ export class UIManager {
       this.historyDrawer?.classList.add('hidden');
     }
     this.scene.setMenuShowcaseMode(visible);
+    soundManager.setMenuMusicActive(visible);
     if (visible) {
       this.syncMapCards();
       this.syncSkinButtons(this.draftConfig.skinId ?? this.engine.getConfig().skinId ?? 'arcane_royalty');
@@ -235,6 +343,14 @@ export class UIManager {
     if (mapId === 'sanctum') return t.mapSanctum;
     if (mapId === 'classic') return t.mapClassic;
     return t.mapCathedral;
+  }
+
+  private getMapDescription(mapId: MapId): string {
+    const t = TRANSLATIONS[this.lang];
+    if (mapId === 'warhall') return t.mapWarHallDesc;
+    if (mapId === 'sanctum') return t.mapSanctumDesc;
+    if (mapId === 'classic') return t.mapClassicDesc;
+    return t.mapCathedralDesc;
   }
 
   private getCameraDisplayLabel(preset: CameraPreset): string {
@@ -323,7 +439,7 @@ export class UIManager {
     setText('skin-desc-classic', t.skinClassicDesc);
     setText('btn-skins-confirm', t.btnEquipSkin);
 
-    // Lobby Modal
+    // Lobby Modal (Simplified — Arena Map & Chess Skin Persisted from Main Menu)
     setText('lobby-title', t.lobbyTitle);
     setText('label-game-mode', t.labelGameMode);
     setText('btn-mode-ai', t.modeVsAI);
@@ -342,20 +458,11 @@ export class UIManager {
     setText('btn-clock-3', t.clock3m);
     setText('btn-clock-5', t.clock5m);
     setText('btn-clock-10', t.clock10m);
-    setText('label-arena-map', t.labelArenaMap);
-    setText('btn-lobby-map-cathedral', t.mapCathedral);
-    setText('btn-lobby-map-warhall', t.mapWarHall);
-    setText('btn-lobby-map-sanctum', t.mapSanctum);
-    setText('btn-lobby-map-classic', t.mapClassic);
-    setText('label-lobby-skin', t.labelPieceSkin);
-    setText('btn-lobby-skin-royalty', t.skinArcaneRoyalty);
-    setText('btn-lobby-skin-warforged', t.skinRunicWarforged);
-    setText('btn-lobby-skin-sanctum', t.skinMysticSanctum);
-    setText('btn-lobby-skin-classic', t.skinClassic);
     setText('label-camera-preset', t.labelCameraPreset);
     setText('btn-cam-gameplay', t.camGameplay);
     setText('btn-cam-top', t.camOverhead);
     setText('btn-cam-cinematic', t.camCinematic);
+    setText('label-lobby-loadout', t.lobbyActiveLoadoutPrefix);
     setText('btn-lobby-mainmenu', t.btnMainMenu);
     setText('btn-lobby-resume', t.btnResumeMatch);
     setText('btn-lobby-start', t.btnStartMatch);
@@ -397,12 +504,9 @@ export class UIManager {
     setText('btn-quality-low', t.qualityLow);
     setText('btn-quality-medium', t.qualityMedium);
     setText('btn-quality-high', t.qualityHigh);
-    setText('label-setting-skin', t.labelPieceSkin);
-    setText('btn-setting-skin-royalty', t.skinArcaneRoyalty);
-    setText('btn-setting-skin-warforged', t.skinRunicWarforged);
-    setText('btn-setting-skin-sanctum', t.skinMysticSanctum);
-    setText('btn-setting-skin-classic', t.skinClassic);
     setText('label-setting-volume', t.settingVolume);
+    setText('label-setting-music-vol', t.settingMusicVolume);
+    setText('label-setting-sfx-vol', t.settingSfxVolume);
     setText('label-setting-music', t.settingMusic);
     setText('label-setting-sfx', t.settingSfx);
     setText('label-setting-camsens', t.settingCamSensitivity);
@@ -823,7 +927,15 @@ export class UIManager {
     this.skinSelectModal?.classList.add('hidden');
     this.gameoverModal.classList.add('hidden');
 
-    this.engine.startNewGame(config);
+    // Always preserve the Main Menu's selected mapId and skinId unless explicitly overridden
+    const persistedMap = config?.mapId ?? this.engine.getConfig().mapId ?? loadSavedMapId('cathedral');
+    const persistedSkin = config?.skinId ?? this.engine.getConfig().skinId ?? loadSavedSkinId('arcane_royalty');
+
+    this.engine.startNewGame({
+      ...config,
+      mapId: persistedMap,
+      skinId: persistedSkin
+    });
     const activeCfg = this.engine.getConfig();
     if (activeCfg.mapId) {
       this.scene.setMap(activeCfg.mapId);
@@ -1006,14 +1118,7 @@ export class UIManager {
       card.addEventListener('click', () => {
         soundManager.playSelect();
         const mapId = (card as HTMLElement).dataset.map as MapId;
-        this.draftConfig.mapId = mapId;
-        this.onlineMapId = mapId;
-        this.engine.setMap(mapId);
-        this.scene.setMap(mapId);
-        soundManager.setMapMusic(mapId);
-        this.syncMapCards();
-        this.syncLobbyControlsWithDraft();
-        this.syncOnlineControls();
+        this.setArenaMap(mapId);
       });
     });
 
@@ -1041,7 +1146,7 @@ export class UIManager {
       this.skinSelectModal?.classList.add('hidden');
     });
 
-    // 4. Lobby Modal Interactions
+    // 4. Simplified Lobby / Match Setup Modal Interactions
     document.getElementById('btn-close-lobby')?.addEventListener('click', () => {
       this.lobbyModal.classList.add('hidden');
       if (!this.isMainMenuVisible() && this.engine.isAITurn()) {
@@ -1071,6 +1176,7 @@ export class UIManager {
           this.openOnlineModal('create');
           return;
         }
+        soundManager.playSelect();
         this.draftConfig.mode = mode;
         this.syncLobbyControlsWithDraft();
       });
@@ -1078,6 +1184,7 @@ export class UIManager {
 
     document.querySelectorAll('#select-color .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        soundManager.playSelect();
         const color = (btn as HTMLElement).dataset.color as Color;
         this.draftConfig.playerColor = color;
         this.syncLobbyControlsWithDraft();
@@ -1086,6 +1193,7 @@ export class UIManager {
 
     document.querySelectorAll('#select-difficulty .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        soundManager.playSelect();
         const diff = (btn as HTMLElement).dataset.diff as AIDifficulty;
         this.draftConfig.aiDifficulty = diff;
         this.syncLobbyControlsWithDraft();
@@ -1094,36 +1202,16 @@ export class UIManager {
 
     document.querySelectorAll('#select-clock .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        soundManager.playSelect();
         const mins = parseInt((btn as HTMLElement).dataset.clock ?? '0', 10) as TimeControlMinutes;
         this.draftConfig.timeControlMinutes = mins;
         this.syncLobbyControlsWithDraft();
       });
     });
 
-    document.querySelectorAll('#select-lobby-map .seg-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const mapId = (btn as HTMLElement).dataset.map as MapId;
-        this.draftConfig.mapId = mapId;
-        this.scene.setMap(mapId);
-        soundManager.setMapMusic(mapId);
-        this.syncLobbyControlsWithDraft();
-        this.syncMapCards();
-      });
-    });
-
-    // Bind Chess Piece Skin Selection across Main Menu, Lobby, and Settings
-    for (const sel of ['#select-menu-skin .seg-btn', '#select-lobby-skin .seg-btn', '#select-setting-skin .seg-btn']) {
-      document.querySelectorAll(sel).forEach((btn) => {
-        btn.addEventListener('click', () => {
-          soundManager.playSelect();
-          const skinId = ((btn as HTMLElement).dataset.skin as PieceSkinId) ?? 'arcane_royalty';
-          this.setPieceSkin(skinId);
-        });
-      });
-    }
-
     document.querySelectorAll('#select-camera-preset .seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        soundManager.playSelect();
         const cam = (btn as HTMLElement).dataset.cam as CameraPreset;
         this.scene.setCameraPreset(cam);
         this.cameraBtn.textContent = this.getCameraDisplayLabel(cam);
@@ -1169,9 +1257,7 @@ export class UIManager {
       btn.addEventListener('click', () => {
         soundManager.playSelect();
         this.onlineMapId = ((btn as HTMLElement).dataset.map as MapId) ?? 'cathedral';
-        this.scene.setMap(this.onlineMapId);
-        soundManager.setMapMusic(this.onlineMapId);
-        this.syncOnlineControls();
+        this.setArenaMap(this.onlineMapId);
       });
     });
 
@@ -1266,20 +1352,45 @@ export class UIManager {
       });
     });
 
-    const volSlider = document.getElementById('slider-volume') as HTMLInputElement;
-    volSlider?.addEventListener('input', () => {
-      soundManager.setVolume(parseInt(volSlider.value, 10) / 100);
-    });
+    const volSlider = document.getElementById('slider-volume') as HTMLInputElement | null;
+    if (volSlider) {
+      volSlider.value = String(Math.round(soundManager.getVolume() * 100));
+      volSlider.addEventListener('input', () => {
+        soundManager.setVolume(parseInt(volSlider.value, 10) / 100);
+      });
+    }
 
-    const musicToggle = document.getElementById('toggle-music') as HTMLInputElement;
-    musicToggle?.addEventListener('change', () => {
-      soundManager.setMusicEnabled(musicToggle.checked);
-    });
+    const musicVolSlider = document.getElementById('slider-music-volume') as HTMLInputElement | null;
+    if (musicVolSlider) {
+      musicVolSlider.value = String(Math.round(soundManager.getMusicVolume() * 100));
+      musicVolSlider.addEventListener('input', () => {
+        soundManager.setMusicVolume(parseInt(musicVolSlider.value, 10) / 100);
+      });
+    }
 
-    const soundToggle = document.getElementById('toggle-sound') as HTMLInputElement;
-    soundToggle?.addEventListener('change', () => {
-      soundManager.setSfxEnabled(soundToggle.checked);
-    });
+    const sfxVolSlider = document.getElementById('slider-sfx-volume') as HTMLInputElement | null;
+    if (sfxVolSlider) {
+      sfxVolSlider.value = String(Math.round(soundManager.getSfxVolume() * 100));
+      sfxVolSlider.addEventListener('input', () => {
+        soundManager.setSfxVolume(parseInt(sfxVolSlider.value, 10) / 100);
+      });
+    }
+
+    const musicToggle = document.getElementById('toggle-music') as HTMLInputElement | null;
+    if (musicToggle) {
+      musicToggle.checked = soundManager.isMusicEnabled();
+      musicToggle.addEventListener('change', () => {
+        soundManager.setMusicEnabled(musicToggle.checked);
+      });
+    }
+
+    const soundToggle = document.getElementById('toggle-sound') as HTMLInputElement | null;
+    if (soundToggle) {
+      soundToggle.checked = soundManager.isSfxEnabled();
+      soundToggle.addEventListener('change', () => {
+        soundManager.setSfxEnabled(soundToggle.checked);
+      });
+    }
 
     const camSensSlider = document.getElementById('slider-cam-sens') as HTMLInputElement;
     camSensSlider?.addEventListener('input', () => {
@@ -1401,23 +1512,70 @@ export class UIManager {
   }
 
   private syncMapCards(): void {
+    const t = TRANSLATIONS[this.lang];
     const activeMap = this.draftConfig.mapId ?? this.engine.getConfig().mapId ?? 'cathedral';
     document.querySelectorAll('#map-cards-grid .map-card').forEach((card) => {
-      card.classList.toggle('active', (card as HTMLElement).dataset.map === activeMap);
+      const isSelected = (card as HTMLElement).dataset.map === activeMap;
+      card.classList.toggle('active', isSelected);
+      const badge = card.querySelector('.card-selected-badge');
+      if (badge) {
+        badge.textContent = t.badgeSelected;
+      }
     });
+
     const mapBadge = document.getElementById('menu-current-map-badge');
     if (mapBadge) {
       mapBadge.textContent = this.getMapDisplayName(activeMap);
     }
+
+    const lobbySummaryMap = document.getElementById('lobby-summary-map');
+    if (lobbySummaryMap) {
+      lobbySummaryMap.textContent = this.getMapDisplayName(activeMap);
+    }
+
+    // Update Enlarged Selected Arena Spotlight Banner in Map Selection Modal
+    const spotlightImg = document.getElementById('map-spotlight-img') as HTMLImageElement | null;
+    if (spotlightImg) {
+      spotlightImg.src = `./previews/maps/map_${activeMap}.png`;
+      spotlightImg.alt = `${this.getMapDisplayName(activeMap)} 3D Preview`;
+    }
+    const spotlightKicker = document.getElementById('map-spotlight-kicker');
+    if (spotlightKicker) {
+      spotlightKicker.textContent = t.badgeSelected;
+    }
+    const spotlightTitle = document.getElementById('map-spotlight-title');
+    if (spotlightTitle) {
+      spotlightTitle.textContent = this.getMapDisplayName(activeMap);
+    }
+    const spotlightDesc = document.getElementById('map-spotlight-desc');
+    if (spotlightDesc) {
+      spotlightDesc.textContent = this.getMapDescription(activeMap);
+    }
+    const spotlightMusic = document.getElementById('map-spotlight-music');
+    if (spotlightMusic) {
+      const trackInfo = MAP_MUSIC_TRACKS[activeMap];
+      spotlightMusic.textContent = `♪ ${this.lang === 'id' ? trackInfo.titleId : trackInfo.titleEn}`;
+    }
   }
 
   private syncLobbyControlsWithDraft(): void {
+    // Always sync draftConfig's mapId and skinId from the persisted Main Menu choices
+    this.draftConfig.mapId = this.engine.getConfig().mapId ?? loadSavedMapId('cathedral');
+    this.draftConfig.skinId = this.engine.getConfig().skinId ?? loadSavedSkinId('arcane_royalty');
+
     document.querySelectorAll('#select-mode .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.mode === this.draftConfig.mode);
     });
     document.querySelectorAll('#select-color .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.color === this.draftConfig.playerColor);
     });
+
+    // Show AI Opponent Difficulty ONLY when Single Player vs AI is selected
+    const difficultyGroup = document.getElementById('group-difficulty');
+    if (difficultyGroup) {
+      difficultyGroup.classList.toggle('hidden', this.draftConfig.mode !== 'ai');
+    }
+
     document.querySelectorAll('#select-difficulty .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.diff === this.draftConfig.aiDifficulty);
     });
@@ -1427,13 +1585,25 @@ export class UIManager {
         parseInt((b as HTMLElement).dataset.clock ?? '0', 10) === this.draftConfig.timeControlMinutes
       );
     });
-    const draftMap = this.draftConfig.mapId ?? 'cathedral';
-    document.querySelectorAll('#select-lobby-map .seg-btn').forEach((b) => {
-      b.classList.toggle('active', (b as HTMLElement).dataset.map === draftMap);
-    });
-    this.syncSkinButtons(this.draftConfig.skinId ?? 'arcane_royalty');
     document.querySelectorAll('#select-camera-preset .seg-btn').forEach((b) => {
       b.classList.toggle('active', (b as HTMLElement).dataset.cam === this.scene.getCameraPreset());
     });
+
+    // Show "Resume Match" only when an active match is in progress (either outside Main Menu or with moves played)
+    const resumeBtn = document.getElementById('btn-lobby-resume');
+    if (resumeBtn) {
+      const hasActiveMatch = !this.isMainMenuVisible() || this.engine.getSnapshot().moveHistory.length > 0;
+      resumeBtn.classList.toggle('hidden', !hasActiveMatch);
+    }
+
+    // Update read-only summary pills for Arena & Skin
+    const lobbySummaryMap = document.getElementById('lobby-summary-map');
+    if (lobbySummaryMap) {
+      lobbySummaryMap.textContent = this.getMapDisplayName(this.draftConfig.mapId);
+    }
+    const lobbySummarySkin = document.getElementById('lobby-summary-skin');
+    if (lobbySummarySkin) {
+      lobbySummarySkin.textContent = this.getSkinDisplayName(this.draftConfig.skinId);
+    }
   }
 }

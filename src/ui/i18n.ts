@@ -108,6 +108,8 @@ export interface TranslationStrings {
   qualityMedium: string;
   qualityHigh: string;
   settingVolume: string;
+  settingMusicVolume: string;
+  settingSfxVolume: string;
   settingMusic: string;
   settingSfx: string;
   settingCamSensitivity: string;
@@ -115,6 +117,10 @@ export interface TranslationStrings {
   settingReducedMotion: string;
   settingShowCoords: string;
   btnDone: string;
+  badgeSelected: string;
+  badgeEquipped: string;
+  skinLineupLegend: string;
+  lobbyActiveLoadoutPrefix: string;
 
   // Promotion
   promoTitle: string;
@@ -329,13 +335,20 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     qualityMedium: 'Medium',
     qualityHigh: 'High',
     settingVolume: 'Master Audio Volume',
-    settingMusic: 'Map Background Music',
+    settingMusicVolume: 'Music Volume',
+    settingSfxVolume: 'SFX Volume',
+    settingMusic: 'Background Music (Magical Score)',
     settingSfx: 'Battle Sound Effects (SFX)',
     settingCamSensitivity: 'Camera & Zoom Sensitivity',
     settingMagicalFx: 'Combat FX & Fire Particles',
     settingReducedMotion: 'Reduced Motion (Instant Camera & Moves)',
     settingShowCoords: 'Show Board Coordinates (A–H, 1–8)',
     btnDone: 'Done',
+    badgeSelected: '✓ Selected',
+    badgeEquipped: '✓ Equipped',
+    skinLineupLegend:
+      '3D Models Shown: ♙ Pawn • ♖ Rook • ♘ Knight • ♗ Bishop • ♕ Queen • ♔ King (White & Black)',
+    lobbyActiveLoadoutPrefix: 'Selected Arena & Skin',
 
     promoTitle: 'Ascension — Choose Promotion Piece',
     promoQueenSub: 'Royal Sovereign',
@@ -533,13 +546,20 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     qualityMedium: 'Sedang',
     qualityHigh: 'Tinggi',
     settingVolume: 'Volume Audio Utama',
-    settingMusic: 'Musik Latar Peta',
+    settingMusicVolume: 'Volume Musik',
+    settingSfxVolume: 'Volume Efek Suara',
+    settingMusic: 'Musik Latar (Skor Fantasi)',
     settingSfx: 'Efek Suara Pertempuran (SFX)',
     settingCamSensitivity: 'Sensitivitas Kamera & Zoom',
     settingMagicalFx: 'Efek Tempur & Partikel Api',
     settingReducedMotion: 'Kurangi Gerakan (Kamera & Langkah Instan)',
     settingShowCoords: 'Tampilkan Koordinat Papan (A–H, 1–8)',
     btnDone: 'Selesai',
+    badgeSelected: '✓ Dipilih',
+    badgeEquipped: '✓ Digunakan',
+    skinLineupLegend:
+      'Model 3D Ditampilkan: ♙ Pion • ♖ Benteng • ♘ Kuda • ♗ Gajah • ♕ Menteri • ♔ Raja (Putih & Hitam)',
+    lobbyActiveLoadoutPrefix: 'Arena & Skin Aktif',
 
     promoTitle: 'Kenaikan Pangkat — Pilih Bidak Promosi',
     promoQueenSub: 'Penguasa Kerajaan',

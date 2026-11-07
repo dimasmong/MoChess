@@ -242,11 +242,39 @@
             <button type="button" class="modal-close" id="btn-close-maps" aria-label="Close Map Selection">×</button>
           </div>
           <div class="modal-body">
+            <!-- Enlarged Selected Arena Spotlight Banner -->
+            <div class="selection-spotlight-banner" id="map-spotlight-banner">
+              <div class="spotlight-media-wrap">
+                <img
+                  class="spotlight-preview-img"
+                  id="map-spotlight-img"
+                  src="./previews/maps/map_cathedral.png"
+                  alt="Selected Battle Arena 3D Preview"
+                />
+                <span class="spotlight-badge" id="map-spotlight-music">♪ Gothic Cathedral — Sacred Arcana</span>
+              </div>
+              <div class="spotlight-info">
+                <span class="spotlight-kicker" id="map-spotlight-kicker">✓ Selected Arena</span>
+                <h3 class="spotlight-title" id="map-spotlight-title">Gothic Cathedral</h3>
+                <p class="spotlight-desc" id="map-spotlight-desc">
+                  Ancient vaulted limestone nave illuminated by roaring wrought-iron fire braziers and stained glass.
+                </p>
+              </div>
+            </div>
+
             <div class="map-cards-grid" id="map-cards-grid">
               <!-- Map 1: Gothic Cathedral -->
               <button type="button" class="map-card active" data-map="cathedral" id="card-map-cathedral">
                 <div class="map-card-preview preview-cathedral">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-map-cathedral"
+                    src="./previews/maps/map_cathedral.png"
+                    loading="lazy"
+                    alt="Gothic Cathedral 3D Preview"
+                  />
                   <span class="map-card-tag">I</span>
+                  <span class="card-selected-badge">✓ Selected</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="map-title-cathedral">Gothic Cathedral</h3>
@@ -259,7 +287,15 @@
               <!-- Map 2: Royal War Hall -->
               <button type="button" class="map-card" data-map="warhall" id="card-map-warhall">
                 <div class="map-card-preview preview-warhall">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-map-warhall"
+                    src="./previews/maps/map_warhall.png"
+                    loading="lazy"
+                    alt="Royal War Hall 3D Preview"
+                  />
                   <span class="map-card-tag">II</span>
+                  <span class="card-selected-badge">✓ Selected</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="map-title-warhall">Royal War Hall</h3>
@@ -272,7 +308,15 @@
               <!-- Map 3: Arcane Sanctum -->
               <button type="button" class="map-card" data-map="sanctum" id="card-map-sanctum">
                 <div class="map-card-preview preview-sanctum">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-map-sanctum"
+                    src="./previews/maps/map_sanctum.png"
+                    loading="lazy"
+                    alt="Arcane Sanctum 3D Preview"
+                  />
                   <span class="map-card-tag">III</span>
+                  <span class="card-selected-badge">✓ Selected</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="map-title-sanctum">Arcane Sanctum</h3>
@@ -285,7 +329,15 @@
               <!-- Map 4: Classic Board -->
               <button type="button" class="map-card" data-map="classic" id="card-map-classic">
                 <div class="map-card-preview preview-classic">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-map-classic"
+                    src="./previews/maps/map_classic.png"
+                    loading="lazy"
+                    alt="Classic Board 3D Preview"
+                  />
                   <span class="map-card-tag">IV</span>
+                  <span class="card-selected-badge">✓ Selected</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="map-title-classic">Classic Board</h3>
@@ -315,11 +367,41 @@
             <button type="button" class="modal-close" id="btn-close-skins" aria-label="Close Skin Selection">×</button>
           </div>
           <div class="modal-body">
+            <!-- Enlarged 3D Model Lineup Spotlight Banner -->
+            <div class="selection-spotlight-banner" id="skin-spotlight-banner">
+              <div class="spotlight-media-wrap">
+                <img
+                  class="spotlight-preview-img"
+                  id="skin-spotlight-img"
+                  src="./previews/skins/skin_arcane_royalty.png"
+                  alt="Selected 3D Chess Skin Model Lineup"
+                />
+                <span class="spotlight-badge" id="skin-lineup-legend">
+                  3D Models Shown: ♙ Pawn • ♖ Rook • ♘ Knight • ♗ Bishop • ♕ Queen • ♔ King (White &amp; Black)
+                </span>
+              </div>
+              <div class="spotlight-info">
+                <span class="spotlight-kicker" id="skin-spotlight-kicker">✓ Equipped Skin</span>
+                <h3 class="spotlight-title" id="skin-spotlight-title">Arcane Royalty</h3>
+                <p class="spotlight-desc" id="skin-spotlight-desc">
+                  Regal Cathedral Knights &amp; Sovereigns in polished ivory-marble, obsidian, and gilded gold with Solar Rune Judgment finisher.
+                </p>
+              </div>
+            </div>
+
             <div class="map-cards-grid skin-cards-grid" id="skin-cards-grid">
               <!-- Skin 1: Arcane Royalty -->
               <button type="button" class="map-card skin-card active" data-skin="arcane_royalty" id="card-skin-royalty">
                 <div class="map-card-preview preview-skin-royalty">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-skin-royalty"
+                    src="./previews/skins/skin_arcane_royalty.png"
+                    loading="lazy"
+                    alt="Arcane Royalty 3D Models Preview"
+                  />
                   <span class="map-card-tag">♔</span>
+                  <span class="card-selected-badge">✓ Equipped</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="skin-title-royalty">Arcane Royalty</h3>
@@ -332,7 +414,15 @@
               <!-- Skin 2: Runic Warforged -->
               <button type="button" class="map-card skin-card" data-skin="runic_warforged" id="card-skin-warforged">
                 <div class="map-card-preview preview-skin-warforged">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-skin-warforged"
+                    src="./previews/skins/skin_runic_warforged.png"
+                    loading="lazy"
+                    alt="Runic Warforged 3D Models Preview"
+                  />
                   <span class="map-card-tag">♜</span>
+                  <span class="card-selected-badge">✓ Equipped</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="skin-title-warforged">Runic Warforged</h3>
@@ -345,7 +435,15 @@
               <!-- Skin 3: Mystic Sanctum -->
               <button type="button" class="map-card skin-card" data-skin="mystic_sanctum" id="card-skin-sanctum">
                 <div class="map-card-preview preview-skin-sanctum">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-skin-sanctum"
+                    src="./previews/skins/skin_mystic_sanctum.png"
+                    loading="lazy"
+                    alt="Mystic Sanctum 3D Models Preview"
+                  />
                   <span class="map-card-tag">♝</span>
+                  <span class="card-selected-badge">✓ Equipped</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="skin-title-sanctum">Mystic Sanctum</h3>
@@ -358,7 +456,15 @@
               <!-- Skin 4: Classic Staunton -->
               <button type="button" class="map-card skin-card" data-skin="classic" id="card-skin-classic">
                 <div class="map-card-preview preview-skin-classic">
+                  <img
+                    class="card-preview-img"
+                    id="preview-img-skin-classic"
+                    src="./previews/skins/skin_classic.png"
+                    loading="lazy"
+                    alt="Classic Staunton 3D Models Preview"
+                  />
                   <span class="map-card-tag">♞</span>
+                  <span class="card-selected-badge">✓ Equipped</span>
                 </div>
                 <div class="map-card-info">
                   <h3 class="map-card-title" id="skin-title-classic">Classic Staunton</h3>
@@ -375,9 +481,9 @@
         </div>
       </div>
 
-      <!-- Lobby & Match Configuration Modal -->
+      <!-- Simplified Play / Match Setup Modal (Map & Skin Selection Removed — Persisted from Main Menu) -->
       <div class="modal-backdrop hidden" id="lobby-modal" role="dialog" aria-modal="true" aria-labelledby="lobby-title">
-        <div class="modal-card">
+        <div class="modal-card lobby-card-compact">
           <div class="modal-header">
             <h2 id="lobby-title">Match Setup — Sanctum Lobby</h2>
             <button type="button" class="modal-close" id="btn-close-lobby" aria-label="Close Lobby">×</button>
@@ -392,7 +498,7 @@
               </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="group-faction">
               <label id="label-your-faction">Your Faction</label>
               <div class="segmented-control" id="select-color">
                 <button type="button" class="seg-btn active" data-color="w" id="btn-color-w">White &amp; Gold</button>
@@ -421,31 +527,20 @@
             </div>
 
             <div class="form-group">
-              <label id="label-arena-map">Battle Arena (Map)</label>
-              <div class="segmented-control" id="select-lobby-map">
-                <button type="button" class="seg-btn active" data-map="cathedral" id="btn-lobby-map-cathedral">Gothic Cathedral</button>
-                <button type="button" class="seg-btn" data-map="warhall" id="btn-lobby-map-warhall">Royal War Hall</button>
-                <button type="button" class="seg-btn" data-map="sanctum" id="btn-lobby-map-sanctum">Arcane Sanctum</button>
-                <button type="button" class="seg-btn" data-map="classic" id="btn-lobby-map-classic">Classic Board</button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label id="label-lobby-skin">Chess Piece Skin (3D Sculpted Set)</label>
-              <div class="segmented-control" id="select-lobby-skin">
-                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-lobby-skin-royalty">Arcane Royalty</button>
-                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-lobby-skin-warforged">Runic Warforged</button>
-                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-lobby-skin-sanctum">Mystic Sanctum</button>
-                <button type="button" class="seg-btn" data-skin="classic" id="btn-lobby-skin-classic">Classic Staunton</button>
-              </div>
-            </div>
-
-            <div class="form-group">
               <label id="label-camera-preset">Camera Perspective</label>
               <div class="segmented-control" id="select-camera-preset">
                 <button type="button" class="seg-btn active" data-cam="gameplay" id="btn-cam-gameplay">Strategic Top-Down</button>
                 <button type="button" class="seg-btn" data-cam="top" id="btn-cam-top">Direct Overhead</button>
                 <button type="button" class="seg-btn" data-cam="cinematic" id="btn-cam-cinematic">3/4 Showcase</button>
+              </div>
+            </div>
+
+            <!-- Read-Only Summary of Persisted Main Menu Arena & Skin Selection -->
+            <div class="lobby-loadout-summary" id="lobby-loadout-summary">
+              <span class="loadout-label" id="label-lobby-loadout">Selected Arena &amp; Skin</span>
+              <div class="loadout-pills">
+                <span class="loadout-pill" id="lobby-summary-map">Gothic Cathedral</span>
+                <span class="loadout-pill" id="lobby-summary-skin">Arcane Royalty</span>
               </div>
             </div>
           </div>
@@ -482,23 +577,23 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label id="label-setting-skin">Chess Piece Skin (3D Sculpted Set)</label>
-              <div class="segmented-control" id="select-setting-skin">
-                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-setting-skin-royalty">Arcane Royalty</button>
-                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-setting-skin-warforged">Runic Warforged</button>
-                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-setting-skin-sanctum">Mystic Sanctum</button>
-                <button type="button" class="seg-btn" data-skin="classic" id="btn-setting-skin-classic">Classic Staunton</button>
-              </div>
-            </div>
-
             <div class="setting-row">
               <span id="label-setting-volume">Master Audio Volume</span>
               <input type="range" id="slider-volume" min="0" max="100" value="80" class="setting-slider" />
             </div>
 
             <div class="setting-row">
-              <span id="label-setting-music">Map Background Music</span>
+              <span id="label-setting-music-vol">Music Volume</span>
+              <input type="range" id="slider-music-volume" min="0" max="100" value="75" class="setting-slider" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-sfx-vol">SFX Volume</span>
+              <input type="range" id="slider-sfx-volume" min="0" max="100" value="85" class="setting-slider" />
+            </div>
+
+            <div class="setting-row">
+              <span id="label-setting-music">Background Music (Magical Score)</span>
               <input type="checkbox" id="toggle-music" checked />
             </div>
 

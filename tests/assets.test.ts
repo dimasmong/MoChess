@@ -6,7 +6,7 @@ import { getPieceGeometryParts } from '../src/assets/PieceGeometryBuilder';
 import { PieceAssetManager } from '../src/assets/PieceAssetManager';
 import { ChessboardBuilder } from '../src/scene/ChessboardBuilder';
 import { buildMenuHeroScene } from '../src/scene/MenuHeroSceneBuilder';
-import { soundManager, MAP_MUSIC_TRACKS } from '../src/audio/SoundManager';
+import { soundManager, MAIN_MENU_MUSIC_TRACK, MAP_MUSIC_TRACKS } from '../src/audio/SoundManager';
 import type { PieceSkinId, PieceSymbol } from '../src/engine/types';
 
 describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)', () => {
@@ -152,8 +152,16 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     expect(board.coordinatesGroup.visible).toBe(true);
   });
 
-  it('switches Map-Specific Music tracks automatically for cathedral, warhall, sanctum, and classic and supports ON/OFF toggle', () => {
+  it('switches Main Menu & Map-Specific Magical Fantasy Music tracks, verifies all 5 WAV compositions and 8 3D preview PNGs exist, and supports independent volume controls', () => {
     soundManager.setMusicEnabled(true);
+
+    // Main Menu music mode plays MAIN_MENU_MUSIC_TRACK
+    soundManager.setMenuMusicActive(true);
+    expect(soundManager.getMusicStatus().trackId).toBe(MAIN_MENU_MUSIC_TRACK.trackId);
+    expect(soundManager.getMusicStatus().inMenuMode).toBe(true);
+
+    // Exiting Main Menu transitions to active map track
+    soundManager.setMenuMusicActive(false);
     soundManager.setMapMusic('cathedral');
     expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.cathedral.trackId);
 
@@ -166,9 +174,52 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     soundManager.setMapMusic('classic');
     expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.classic.trackId);
 
+    // Verify independent Master, Music, and SFX volume controls
+    soundManager.setVolume(0.75);
+    soundManager.setMusicVolume(0.65);
+    soundManager.setSfxVolume(0.85);
+    expect(soundManager.getVolume()).toBeCloseTo(0.75);
+    expect(soundManager.getMusicVolume()).toBeCloseTo(0.65);
+    expect(soundManager.getSfxVolume()).toBeCloseTo(0.85);
+
     soundManager.setMusicEnabled(false);
     expect(soundManager.getMusicStatus().enabled).toBe(false);
     soundManager.setMusicEnabled(true);
     expect(soundManager.getMusicStatus().enabled).toBe(true);
+
+    // Verify all 5 original magical fantasy WAV compositions exist and have valid RIFF/WAVE headers
+    const wavFiles = [
+      'menu_arcane_kingdom.wav',
+      'cathedral_sacred_arcana.wav',
+      'warhall_crown_of_kingdom.wav',
+      'sanctum_celestial_enchantment.wav',
+      'classic_timeless_strategy.wav'
+    ];
+    for (const file of wavFiles) {
+      const p = path.resolve(process.cwd(), 'public', 'audio', 'music', file);
+      expect(fs.existsSync(p)).toBe(true);
+      const buf = fs.readFileSync(p);
+      expect(buf.toString('ascii', 0, 4)).toBe('RIFF');
+      expect(buf.toString('ascii', 8, 12)).toBe('WAVE');
+      expect(buf.length).toBeGreaterThan(200_000);
+    }
+
+    // Verify all 8 real 3D preview PNGs exist on disk
+    const previewFiles = [
+      'previews/maps/map_cathedral.png',
+      'previews/maps/map_warhall.png',
+      'previews/maps/map_sanctum.png',
+      'previews/maps/map_classic.png',
+      'previews/skins/skin_arcane_royalty.png',
+      'previews/skins/skin_runic_warforged.png',
+      'previews/skins/skin_mystic_sanctum.png',
+      'previews/skins/skin_classic.png'
+    ];
+    for (const rel of previewFiles) {
+      const p = path.resolve(process.cwd(), 'public', rel);
+      expect(fs.existsSync(p)).toBe(true);
+      const stat = fs.statSync(p);
+      expect(stat.size).toBeGreaterThan(100_000);
+    }
   });
 });

@@ -403,6 +403,267 @@ export class SceneManager {
     return this.assetManager.getSkin();
   }
 
+  private mapPreviewCache = new Map<MapId, string>();
+  private skinPreviewCache = new Map<PieceSkinId, string>();
+
+  /**
+   * Renders a real, cached 3D visual preview of the specified Battle Arena Map (`cathedral`, `warhall`, `sanctum`, `classic`)
+   * using the actual in-game 3D architecture, chessboard, pieces, and lighting atmosphere.
+   */
+  public renderMapPreviewDataUrl(mapId: MapId, width = 800, height = 450): string {
+    const cached = this.mapPreviewCache.get(mapId);
+    if (cached) return cached;
+
+    const prevMap = this.currentMapId;
+    const prevSkin = this.assetManager.getSkin();
+    const prevMenuShowcase = this.menuShowcaseActive;
+    const prevCamPos = this.camera.position.clone();
+    const prevCamQuat = this.camera.quaternion.clone();
+    const prevFov = this.camera.fov;
+    const prevAspect = this.camera.aspect;
+    const prevSize = new THREE.Vector2();
+    this.renderer.getSize(prevSize);
+
+    try {
+      this.menuShowcaseActive = false;
+      this.menuHeroScene.group.visible = false;
+      this.setMap(mapId);
+      if (mapId === 'classic') {
+        this.assetManager.setSkin('classic');
+      } else if (mapId === 'warhall') {
+        this.assetManager.setSkin('runic_warforged');
+      } else if (mapId === 'sanctum') {
+        this.assetManager.setSkin('mystic_sanctum');
+      } else {
+        this.assetManager.setSkin('arcane_royalty');
+      }
+      if (this.lastSnapshot) {
+        this.rebuildAllPieces(this.lastSnapshot);
+      }
+
+      this.arena.group.visible = true;
+      this.chessboard.group.visible = true;
+      this.piecesGroup.visible = true;
+      this.applyMapAtmosphere(mapId);
+
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.fov = 38;
+      this.camera.updateProjectionMatrix();
+
+      if (mapId === 'cathedral') {
+        this.camera.position.set(3.85, 2.72, 5.15);
+        this.camera.lookAt(-0.15, 0.72, -1.15);
+      } else if (mapId === 'warhall') {
+        this.camera.position.set(3.55, 2.62, 5.05);
+        this.camera.lookAt(0.0, 0.85, -1.45);
+      } else if (mapId === 'sanctum') {
+        this.camera.position.set(4.05, 2.88, 5.20);
+        this.camera.lookAt(0.0, 0.75, -0.95);
+      } else {
+        this.camera.position.set(3.25, 3.35, 4.55);
+        this.camera.lookAt(0.0, 0.25, -0.20);
+      }
+
+      this.renderer.render(this.scene, this.camera);
+      const dataUrl = this.renderer.domElement.toDataURL('image/png');
+      this.mapPreviewCache.set(mapId, dataUrl);
+      return dataUrl;
+    } finally {
+      this.assetManager.setSkin(prevSkin);
+      this.setMap(prevMap);
+      if (this.lastSnapshot) {
+        this.rebuildAllPieces(this.lastSnapshot);
+      }
+      this.setMenuShowcaseMode(prevMenuShowcase);
+      this.renderer.setSize(prevSize.x, prevSize.y, false);
+      this.camera.aspect = prevAspect;
+      this.camera.fov = prevFov;
+      this.camera.position.copy(prevCamPos);
+      this.camera.quaternion.copy(prevCamQuat);
+      this.camera.updateProjectionMatrix();
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  /**
+   * Renders a real, cached 3D visual preview of the specified Chess Piece Skin (`arcane_royalty`, `runic_warforged`, `mystic_sanctum`, `classic`),
+   * displaying all 6 piece types (`King, Queen, Bishop, Knight, Rook, Pawn`) in BOTH White and Black factions on a two-tiered showcase dais.
+   */
+  public renderSkinPreviewDataUrl(skinId: PieceSkinId, width = 800, height = 450): string {
+    const cached = this.skinPreviewCache.get(skinId);
+    if (cached) return cached;
+
+    const prevSkin = this.assetManager.getSkin();
+    const prevMenuShowcase = this.menuShowcaseActive;
+    const prevArenaVis = this.arena.group.visible;
+    const prevBoardVis = this.chessboard.group.visible;
+    const prevPiecesVis = this.piecesGroup.visible;
+    const prevHeroVis = this.menuHeroScene.group.visible;
+    const prevBg = this.scene.background;
+    const prevFog = this.scene.fog;
+    const prevCamPos = this.camera.position.clone();
+    const prevCamQuat = this.camera.quaternion.clone();
+    const prevFov = this.camera.fov;
+    const prevAspect = this.camera.aspect;
+    const prevSize = new THREE.Vector2();
+    this.renderer.getSize(prevSize);
+
+    const stageGroup = new THREE.Group();
+    this.scene.add(stageGroup);
+
+    try {
+      this.arena.group.visible = false;
+      this.chessboard.group.visible = false;
+      this.piecesGroup.visible = false;
+      this.menuHeroScene.group.visible = false;
+
+      // Skin-specific atmospheric backdrop & gallery plinth colors
+      const themes: Record<
+        PieceSkinId,
+        { bg: string; plinth: string; trim: string; key: string; rim: string }
+      > = {
+        arcane_royalty: {
+          bg: '#110d19',
+          plinth: '#1c1626',
+          trim: '#e2b857',
+          key: '#ffe5b8',
+          rim: '#ffaa44'
+        },
+        runic_warforged: {
+          bg: '#160b09',
+          plinth: '#241310',
+          trim: '#d67229',
+          key: '#ffd2a6',
+          rim: '#ff6622'
+        },
+        mystic_sanctum: {
+          bg: '#091021',
+          plinth: '#101c36',
+          trim: '#4cd4ff',
+          key: '#d8f2ff',
+          rim: '#44ccff'
+        },
+        classic: {
+          bg: '#14110e',
+          plinth: '#261e18',
+          trim: '#c8a464',
+          key: '#fff6e8',
+          rim: '#e6c896'
+        }
+      };
+      const th = themes[skinId] ?? themes.arcane_royalty;
+      this.scene.background = new THREE.Color(th.bg);
+      this.scene.fog = new THREE.FogExp2(th.bg, 0.035);
+
+      const plinthMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(th.plinth),
+        roughness: 0.42,
+        metalness: 0.25
+      });
+      const trimMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(th.trim),
+        roughness: 0.25,
+        metalness: 0.85
+      });
+
+      // Front Tier Plinth (White Faction)
+      const frontPlinth = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.24, 1.15), plinthMat);
+      frontPlinth.position.set(0, -0.12, 0.56);
+      stageGroup.add(frontPlinth);
+
+      const frontTrim = new THREE.Mesh(new THREE.BoxGeometry(5.26, 0.04, 1.20), trimMat);
+      frontTrim.position.set(0, 0.0, 0.56);
+      stageGroup.add(frontTrim);
+
+      // Elevated Back Tier Plinth (Black Faction)
+      const backPlinth = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.62, 1.15), plinthMat);
+      backPlinth.position.set(0, 0.07, -0.56);
+      stageGroup.add(backPlinth);
+
+      const backTrim = new THREE.Mesh(new THREE.BoxGeometry(5.46, 0.04, 1.20), trimMat);
+      backTrim.position.set(0, 0.38, -0.56);
+      stageGroup.add(backTrim);
+
+      // Decorative Backdrop Arch / Halo Ring
+      const haloRing = new THREE.Mesh(new THREE.TorusGeometry(2.35, 0.025, 12, 64), trimMat);
+      haloRing.position.set(0, 1.05, -1.45);
+      stageGroup.add(haloRing);
+
+      // Dedicated Showcase Key & Rim Lights
+      const stageKey = new THREE.DirectionalLight(th.key, 2.2);
+      stageKey.position.set(2.8, 4.5, 4.2);
+      stageGroup.add(stageKey);
+
+      const stageRim = new THREE.PointLight(th.rim, 3.2, 12.0, 1.4);
+      stageRim.position.set(-2.5, 2.8, -2.0);
+      stageGroup.add(stageRim);
+
+      this.assetManager.setSkin(skinId);
+
+      const order: PieceSymbol[] = ['p', 'r', 'n', 'b', 'q', 'k'];
+      const files = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+      // Instantiate all 6 White piece types on Front Tier (z = +0.56, y = 0.02)
+      order.forEach((sym, idx) => {
+        const x = -1.95 + idx * 0.78;
+        const sq = `${files[idx]}1` as Square;
+        const piece = this.assetManager.createPieceInstance(sym, 'w', sq, true);
+        piece.position.set(x, 0.02, 0.56);
+        // Angle Knights to 3/4 profile so horse head / cavalry silhouette is unmistakable
+        if (sym === 'n') {
+          piece.rotation.y = 0.52;
+        } else {
+          piece.rotation.y = (2.5 - idx) * 0.08;
+        }
+        stageGroup.add(piece);
+      });
+
+      // Instantiate all 6 Black piece types on Elevated Back Tier (z = -0.54, y = 0.40)
+      order.forEach((sym, idx) => {
+        const x = -1.78 + idx * 0.74;
+        const sq = `${files[idx]}8` as Square;
+        const piece = this.assetManager.createPieceInstance(sym, 'b', sq, true);
+        piece.position.set(x, 0.40, -0.54);
+        if (sym === 'n') {
+          piece.rotation.y = -0.52;
+        } else {
+          piece.rotation.y = (2.5 - idx) * 0.08;
+        }
+        stageGroup.add(piece);
+      });
+
+      this.renderer.setSize(width, height, false);
+      this.camera.aspect = width / height;
+      this.camera.fov = 34;
+      this.camera.position.set(0.0, 1.62, 5.05);
+      this.camera.lookAt(0.0, 0.94, 0.0);
+      this.camera.updateProjectionMatrix();
+
+      this.renderer.render(this.scene, this.camera);
+      const dataUrl = this.renderer.domElement.toDataURL('image/png');
+      this.skinPreviewCache.set(skinId, dataUrl);
+      return dataUrl;
+    } finally {
+      this.scene.remove(stageGroup);
+      this.assetManager.setSkin(prevSkin);
+      this.scene.background = prevBg;
+      this.scene.fog = prevFog;
+      this.arena.group.visible = prevArenaVis;
+      this.chessboard.group.visible = prevBoardVis;
+      this.piecesGroup.visible = prevPiecesVis;
+      this.menuHeroScene.group.visible = prevHeroVis;
+      this.menuShowcaseActive = prevMenuShowcase;
+      this.renderer.setSize(prevSize.x, prevSize.y, false);
+      this.camera.aspect = prevAspect;
+      this.camera.fov = prevFov;
+      this.camera.position.copy(prevCamPos);
+      this.camera.quaternion.copy(prevCamQuat);
+      this.camera.updateProjectionMatrix();
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
   /**
    * Applies real, noticeable visual and performance differences between `low`, `medium`, and `high` graphics modes.
    */
