@@ -2415,6 +2415,487 @@ function buildSanctumKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   };
 }
 
+// ============================================================================
+// SKIN 4: CLASSIC STAUNTON CHESS SET ('classic')
+// Traditional turned Staunton silhouettes: Baluster bases, Spherical Pawn,
+// Crenelated Tower Rook, Carved Horse-Bust Knight, Slotted Mitre Bishop,
+// Scalloped Coronet Queen, and Cross-Finial Staunton King.
+// ============================================================================
+
+function makeLathe(
+  points: Array<[number, number]>,
+  radialSegments: number
+): THREE.BufferGeometry {
+  return createSculptedLathe(points, radialSegments);
+}
+
+function addClassicStauntonBase(
+  bodyList: THREE.BufferGeometry[],
+  goldList: THREE.BufferGeometry[],
+  segs: number,
+  scale = 1.0
+): void {
+  const s = scale;
+  bodyList.push(
+    makeLathe(
+      [
+        [0.001, 0.0],
+        [0.37 * s, 0.0],
+        [0.38 * s, 0.035],
+        [0.35 * s, 0.065],
+        [0.36 * s, 0.095],
+        [0.31 * s, 0.135],
+        [0.24 * s, 0.185],
+        [0.25 * s, 0.215],
+        [0.21 * s, 0.24]
+      ],
+      segs
+    )
+  );
+  // Subtle classic brass felt-pad ring at bottom & upper pedestal collar
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.365 * s, 0.012, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.035, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.245 * s, 0.011, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.205, 0]
+    })
+  );
+}
+
+function buildClassicPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 28 : 16;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 0.88);
+
+  // Turned Staunton Pawn stem, flared collar disc, and spherical ball finial
+  bodyList.push(
+    makeLathe(
+      [
+        [0.185, 0.22],
+        [0.145, 0.36],
+        [0.115, 0.52],
+        [0.105, 0.64],
+        [0.185, 0.675],
+        [0.19, 0.70],
+        [0.11, 0.725],
+        [0.001, 0.73]
+      ],
+      segs
+    )
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.185, 0.01, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.688, 0]
+    })
+  );
+  // Classic spherical Pawn head
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.162, segs, Math.max(12, Math.floor(segs * 0.7))), {
+      position: [0, 0.855, 0]
+    })
+  );
+
+  // Minimal hidden anchors for steel/face so multi-material pipeline stays uniform
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
+function buildClassicRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 28 : 16;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 0.98);
+
+  // Classic tapered Staunton tower column and flared turret cornice
+  bodyList.push(
+    makeLathe(
+      [
+        [0.215, 0.22],
+        [0.195, 0.42],
+        [0.175, 0.68],
+        [0.17, 0.82],
+        [0.225, 0.88],
+        [0.235, 0.94],
+        [0.235, 1.04],
+        [0.165, 1.04],
+        [0.165, 0.96],
+        [0.001, 0.96]
+      ],
+      segs
+    )
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.228, 0.012, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.90, 0]
+    })
+  );
+
+  // 6 classic rectangular battlement merlons around the turret rim
+  const merlonCount = 6;
+  for (let i = 0; i < merlonCount; i++) {
+    const angle = (i * Math.PI * 2) / merlonCount;
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.11, 0.13, 0.065), {
+        rotation: [0, -angle, 0],
+        position: [Math.sin(angle) * 0.198, 1.09, Math.cos(angle) * 0.198]
+      })
+    );
+  }
+
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
+function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 26 : 16;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 0.98);
+
+  // Pedestal transition plinth for the carved Staunton horse bust
+  bodyList.push(
+    makeLathe(
+      [
+        [0.21, 0.22],
+        [0.22, 0.28],
+        [0.19, 0.33],
+        [0.001, 0.34]
+      ],
+      segs
+    )
+  );
+
+  // Classic carved Staunton Horse Bust (muscular chest, arched neck, sculpted head & muzzle)
+  const neckSegments: Array<{ pos: [number, number, number]; rx: number; ry: number; rz: number }> = [
+    { pos: [0, 0.40, -0.01], rx: 0.165, ry: 0.14, rz: 0.185 },
+    { pos: [0, 0.52, 0.01], rx: 0.155, ry: 0.14, rz: 0.18 },
+    { pos: [0, 0.65, 0.02], rx: 0.145, ry: 0.14, rz: 0.175 },
+    { pos: [0, 0.78, 0.01], rx: 0.135, ry: 0.135, rz: 0.168 },
+    { pos: [0, 0.91, -0.01], rx: 0.128, ry: 0.13, rz: 0.16 },
+    { pos: [0, 1.02, 0.02], rx: 0.12, ry: 0.12, rz: 0.155 }
+  ];
+  for (const s of neckSegments) {
+    bodyList.push(
+      prepGeo(new THREE.SphereGeometry(1.0, 16, 12), {
+        scale: [s.rx, s.ry, s.rz],
+        position: s.pos
+      })
+    );
+  }
+
+  // Sculpted Horse Forehead, Bridge of Nose, and Tapered Muzzle (+Z forward, strictly within z <= 0.32)
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(1.0, 16, 12), {
+      scale: [0.115, 0.11, 0.165],
+      rotation: [0.42, 0, 0],
+      position: [0, 0.98, 0.11]
+    })
+  );
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.068, 0.098, 0.24, 14), {
+      rotation: [Math.PI * 0.36, 0, 0],
+      position: [0, 0.91, 0.19]
+    })
+  );
+  // Sculpted Snout & Nostrils
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.072, 14, 10), {
+      scale: [1.05, 0.88, 1.1],
+      position: [0, 0.855, 0.27]
+    })
+  );
+  // Lower Jaw / Cheekbone definition
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.095, 14, 10), {
+      scale: [1.12, 0.75, 1.0],
+      position: [0, 0.91, 0.06]
+    })
+  );
+
+  // Twin Alert Pointed Horse Ears at Crown
+  for (const side of [-1, 1]) {
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.036, 0.13, 8), {
+        rotation: [-0.18, 0, side * -0.15],
+        position: [side * 0.065, 1.15, -0.01]
+      })
+    );
+    // Subtle gold eye accent
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.018, 8, 8), {
+        position: [side * 0.098, 0.985, 0.11]
+      })
+    );
+  }
+
+  // Classic Carved Flowing Mane along the back spine (-Z)
+  for (let m = 0; m < 7; m++) {
+    const t = m / 6;
+    const my = 0.42 + t * 0.64;
+    const mz = -0.14 - Math.sin(t * Math.PI) * 0.045;
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.055, 0.11, 0.085), {
+        rotation: [0.25 - t * 0.35, 0, 0],
+        position: [0, my, mz]
+      })
+    );
+  }
+
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
+function buildClassicBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 28 : 16;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 0.98);
+
+  // Slender turned Staunton column, collar rings, and ovoid mitre head
+  bodyList.push(
+    makeLathe(
+      [
+        [0.20, 0.22],
+        [0.155, 0.38],
+        [0.125, 0.58],
+        [0.115, 0.78],
+        [0.185, 0.82],
+        [0.19, 0.85],
+        [0.135, 0.88],
+        [0.165, 0.94],
+        [0.19, 1.05],
+        [0.165, 1.17],
+        [0.095, 1.26],
+        [0.001, 1.29]
+      ],
+      segs
+    )
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.188, 0.011, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.835, 0]
+    })
+  );
+  // Characteristic Staunton Bishop mitre diagonal band & top ball finial
+  goldList.push(
+    prepGeo(new THREE.BoxGeometry(0.22, 0.022, 0.14), {
+      rotation: [0.55, 0, 0],
+      position: [0, 1.12, 0.095]
+    })
+  );
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.052, 14, 12), {
+      position: [0, 1.325, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.042, 0.008, 8, 16), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.28, 0]
+    })
+  );
+
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
+function buildClassicQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 30 : 18;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 1.05);
+
+  // Regal turned Staunton Queen column, double collar, and flared scalloped coronet
+  bodyList.push(
+    makeLathe(
+      [
+        [0.215, 0.23],
+        [0.17, 0.42],
+        [0.138, 0.68],
+        [0.128, 0.94],
+        [0.205, 0.99],
+        [0.215, 1.03],
+        [0.155, 1.07],
+        [0.185, 1.11],
+        [0.16, 1.14],
+        [0.215, 1.32],
+        [0.155, 1.38],
+        [0.09, 1.42],
+        [0.001, 1.43]
+      ],
+      segs
+    )
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.212, 0.012, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.01, 0]
+    })
+  );
+
+  // 9 classic Staunton coronet pearls/points around the Queen's crown rim
+  const crownPoints = 9;
+  for (let i = 0; i < crownPoints; i++) {
+    const angle = (i * Math.PI * 2) / crownPoints;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.034, 0.095, 8), {
+        position: [Math.sin(angle) * 0.195, 1.38, Math.cos(angle) * 0.195]
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.02, 8, 8), {
+        position: [Math.sin(angle) * 0.195, 1.43, Math.cos(angle) * 0.195]
+      })
+    );
+  }
+
+  // Classic spherical globe finial atop the Queen's cushion dome
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.056, 14, 12), {
+      position: [0, 1.475, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.046, 0.009, 8, 16), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.428, 0]
+    })
+  );
+
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
+function buildClassicKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 32 : 18;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+
+  addClassicStauntonBase(bodyList, goldList, segs, 1.1);
+
+  // Commanding Staunton King column, triple collar molding, and royal crown gallery
+  bodyList.push(
+    makeLathe(
+      [
+        [0.23, 0.24],
+        [0.182, 0.46],
+        [0.148, 0.76],
+        [0.138, 1.04],
+        [0.225, 1.09],
+        [0.232, 1.13],
+        [0.17, 1.17],
+        [0.205, 1.21],
+        [0.165, 1.25],
+        [0.23, 1.46],
+        [0.195, 1.53],
+        [0.11, 1.57],
+        [0.001, 1.58]
+      ],
+      segs
+    )
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.228, 0.013, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.11, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.222, 0.012, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.46, 0]
+    })
+  );
+
+  // Iconic Staunton Cross Pattée Finial at the King's Apex (y = 1.57..1.80)
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.058, 0.22, 0.048), {
+      position: [0, 1.68, 0]
+    })
+  );
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.175, 0.058, 0.048), {
+      position: [0, 1.69, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.SphereGeometry(0.028, 10, 10), {
+      position: [0, 1.69, 0]
+    })
+  );
+
+  steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+  faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList)
+  };
+}
+
 const geometryCache = new Map<string, PieceMeshParts>();
 
 export function getPieceGeometryParts(
@@ -2427,7 +2908,28 @@ export function getPieceGeometryParts(
   if (cached) return cached;
 
   let parts: PieceMeshParts;
-  if (skinId === 'runic_warforged') {
+  if (skinId === 'classic') {
+    switch (type) {
+      case 'p':
+        parts = buildClassicPawnGeometry(detail);
+        break;
+      case 'r':
+        parts = buildClassicRookGeometry(detail);
+        break;
+      case 'n':
+        parts = buildClassicKnightGeometry(detail);
+        break;
+      case 'b':
+        parts = buildClassicBishopGeometry(detail);
+        break;
+      case 'q':
+        parts = buildClassicQueenGeometry(detail);
+        break;
+      case 'k':
+        parts = buildClassicKingGeometry(detail);
+        break;
+    }
+  } else if (skinId === 'runic_warforged') {
     switch (type) {
       case 'p':
         parts = buildWarforgedPawnGeometry(detail);

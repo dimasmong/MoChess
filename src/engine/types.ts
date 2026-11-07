@@ -5,8 +5,8 @@ export type { Color, PieceSymbol, Square };
 export type GameMode = 'ai' | 'local' | 'online';
 export type AIDifficulty = 'novice' | 'knight' | 'archmage' | 'grandmaster';
 export type TimeControlMinutes = 0 | 3 | 5 | 10 | 15;
-export type MapId = 'cathedral' | 'warhall' | 'sanctum';
-export type PieceSkinId = 'arcane_royalty' | 'runic_warforged' | 'mystic_sanctum';
+export type MapId = 'cathedral' | 'warhall' | 'sanctum' | 'classic';
+export type PieceSkinId = 'arcane_royalty' | 'runic_warforged' | 'mystic_sanctum' | 'classic';
 export type Language = 'en' | 'id';
 
 export interface CastlingRookMove {

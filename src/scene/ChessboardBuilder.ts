@@ -269,7 +269,12 @@ export class ChessboardBuilder {
     this.darkTileMat.map = blackMarble.map;
     this.darkTileMat.roughnessMap = this.quality === 'low' ? null : blackMarble.roughnessMap;
 
-    if (mapId === 'cathedral') {
+    if (mapId === 'classic') {
+      this.lightTileMat.color.set('#f2ece0');
+      this.darkTileMat.color.set('#221c18');
+      this.goldTrimMat.color.set('#c49a45');
+      this.coordinatesGroup.visible = true;
+    } else if (mapId === 'cathedral') {
       this.lightTileMat.color.set('#dfd7c8');
       this.darkTileMat.color.set('#161922');
       this.goldTrimMat.color.set('#d29a30');

@@ -15,6 +15,11 @@ export const MAP_MUSIC_TRACKS: Record<MapId, { trackId: string; titleEn: string;
     trackId: 'sanctum_mystic_astra',
     titleEn: 'Arcane Sanctum — Astral Crystal Choir & Celesta',
     titleId: 'Sanktum Arkana — Paduan Kristal Astral & Selesta'
+  },
+  classic: {
+    trackId: 'classic_grandmaster_nocturne',
+    titleEn: 'Classic Hall — Grandmaster Chamber Nocturne',
+    titleId: 'Aula Klasik — Nokturne Kamar Grandmaster'
   }
 };
 
@@ -337,6 +342,49 @@ export class SoundManager {
             // Ignore
           }
         }, 2100);
+      } else if (this.activeMapId === 'classic') {
+        // MAP 4: CLASSIC GRANDMASTER HALL — Warm F-major / D-minor chamber strings & classical harpsichord/piano nocturne
+        filter.frequency.setValueAtTime(460, ctx.currentTime);
+        filter.connect(master);
+
+        const chamberPad: Array<{ f: number; type: OscillatorType }> = [
+          { f: 87.31, type: 'triangle' },  // F2 cello
+          { f: 130.81, type: 'sine' },     // C3 viola
+          { f: 174.61, type: 'triangle' }, // F3 warm horn
+          { f: 220.0, type: 'sine' }       // A3 third
+        ];
+        for (const c of chamberPad) {
+          const osc = ctx.createOscillator();
+          osc.type = c.type;
+          osc.frequency.setValueAtTime(c.f, ctx.currentTime);
+          osc.connect(filter);
+          osc.start();
+          this.musicOscillators.push(osc);
+        }
+
+        const nocturneScale = [349.23, 392.0, 440.0, 523.25, 587.33, 659.25, 698.46];
+        let noteIdx = 0;
+        this.musicInterval = setInterval(() => {
+          if (!this.musicEnabled || this.muted || !this.ctx || this.ctx.state !== 'running') return;
+          try {
+            const now = this.ctx.currentTime;
+            const freq = nocturneScale[(noteIdx * 2 + 1) % nocturneScale.length];
+            noteIdx++;
+            const pianoOsc = this.ctx.createOscillator();
+            const pianoGain = this.ctx.createGain();
+            pianoOsc.type = 'triangle';
+            pianoOsc.frequency.setValueAtTime(freq, now);
+            pianoGain.gain.setValueAtTime(0.0001, now);
+            pianoGain.gain.linearRampToValueAtTime(this.volume * 0.045, now + 0.03);
+            pianoGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.9);
+            pianoOsc.connect(pianoGain);
+            pianoGain.connect(this.ctx.destination);
+            pianoOsc.start(now);
+            pianoOsc.stop(now + 1.95);
+          } catch {
+            // Ignore
+          }
+        }, 1950);
       } else {
         // MAP 1: GOTHIC CATHEDRAL — Solemn D-Dorian pipe-organ drone & cathedral nave harp chimes
         filter.frequency.setValueAtTime(310, ctx.currentTime);

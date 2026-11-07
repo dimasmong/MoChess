@@ -13,6 +13,7 @@ import type {
 import { PieceAssetManager } from '../assets/PieceAssetManager';
 import type { QualityTier } from '../assets/ProceduralTextures';
 import { buildCastleArena, type ArenaElements } from './CastleArenaBuilder';
+import { buildMenuHeroScene, type MenuHeroSceneElements } from './MenuHeroSceneBuilder';
 import { ChessboardBuilder, squareToWorldPosition, worldPositionToSquare } from './ChessboardBuilder';
 import { AnimationController } from './AnimationController';
 
@@ -41,6 +42,7 @@ export class SceneManager {
   private readonly assetManager: PieceAssetManager;
   private readonly chessboard: ChessboardBuilder;
   private arena: ArenaElements;
+  private menuHeroScene: MenuHeroSceneElements;
   private readonly animController: AnimationController;
 
   private readonly piecesGroup: THREE.Group;
@@ -52,12 +54,15 @@ export class SceneManager {
 
   private onSquareSelected: (square: Square) => void;
   private onCinematicStateChange?: (active: boolean) => void;
+  private onCheckmateCutsceneComplete?: () => void;
   private settings: SceneSettings;
   private isMobile: boolean;
   private currentMapId: MapId = 'cathedral';
   private activePlayerColor: Color = 'w';
   private currentPreset: CameraPreset = 'gameplay';
   private menuShowcaseActive = false;
+  private checkmateCutscenePending = false;
+  private checkmateDelayTimer: number | null = null;
   private envTexture: THREE.Texture | null = null;
   private lastSnapshot: GameStateSnapshot | null = null;
   private lastSyncedFen: string | null = null;
@@ -78,6 +83,17 @@ export class SceneManager {
     duration: number;
     playerColor: Color;
     onComplete?: () => void;
+  } | null = null;
+
+  private checkmateCutsceneCamera: {
+    startPos: THREE.Vector3;
+    startTarget: THREE.Vector3;
+    standoffPos: THREE.Vector3;
+    losingPos: THREE.Vector3;
+    cutsceneCamPos: THREE.Vector3;
+    cutsceneTarget: THREE.Vector3;
+    elapsed: number;
+    duration: number;
   } | null = null;
 
   private pointerDownPos = { x: 0, y: 0, time: 0 };
@@ -140,7 +156,9 @@ export class SceneManager {
     this.assetManager.applyMapTheme(this.currentMapId);
 
     this.chessboard = new ChessboardBuilder(this.settings.quality, this.isMobile, this.currentMapId);
-    this.chessboard.setCoordinatesVisible(this.settings.showCoordinates);
+    this.chessboard.setCoordinatesVisible(
+      this.settings.showCoordinates || this.currentMapId === 'classic'
+    );
     this.scene.add(this.chessboard.group);
 
     this.arena = buildCastleArena(
@@ -151,6 +169,10 @@ export class SceneManager {
       this.currentMapId
     );
     this.scene.add(this.arena.group);
+
+    this.menuHeroScene = buildMenuHeroScene(this.settings.quality, this.isMobile);
+    this.menuHeroScene.group.visible = false;
+    this.scene.add(this.menuHeroScene.group);
 
     this.piecesGroup = new THREE.Group();
     this.piecesGroup.name = 'ChessPiecesGroup';
@@ -193,6 +215,14 @@ export class SceneManager {
 
   public setOnCinematicStateChange(cb: (active: boolean) => void): void {
     this.onCinematicStateChange = cb;
+  }
+
+  public setOnCheckmateCutsceneComplete(cb: () => void): void {
+    this.onCheckmateCutsceneComplete = cb;
+  }
+
+  public isCheckmateCutscenePlaying(): boolean {
+    return this.checkmateCutscenePending || this.animController.isCheckmateCutsceneActive();
   }
 
   private initRenderer(): void {
@@ -270,6 +300,19 @@ export class SceneManager {
   }
 
   private applyMapAtmosphere(mapId: MapId): void {
+    if (this.menuShowcaseActive) {
+      this.scene.background = new THREE.Color('#090714');
+      this.scene.fog = new THREE.FogExp2('#090714', 0.018);
+      this.hemiLight.color.set('#e8d5ff');
+      this.hemiLight.groundColor.set('#140d1e');
+      this.hemiLight.intensity = 0.56;
+      this.keyLight.color.set('#ffe2a8');
+      this.keyLight.intensity = 2.65;
+      this.rimLight.color.set('#ffaa44');
+      this.topFill.color.set('#99b8ff');
+      return;
+    }
+
     if (mapId === 'cathedral') {
       this.scene.background = new THREE.Color('#0f0b09');
       this.scene.fog = new THREE.FogExp2('#0f0b09', 0.011);
@@ -300,11 +343,21 @@ export class SceneManager {
       this.keyLight.intensity = 2.35;
       this.rimLight.color.set('#55ccff');
       this.topFill.color.set('#9966ff');
+    } else if (mapId === 'classic') {
+      this.scene.background = new THREE.Color('#12100e');
+      this.scene.fog = new THREE.FogExp2('#12100e', 0.008);
+      this.hemiLight.color.set('#fff8ee');
+      this.hemiLight.groundColor.set('#241d17');
+      this.hemiLight.intensity = 0.65;
+      this.keyLight.color.set('#fff3df');
+      this.keyLight.intensity = 2.35;
+      this.rimLight.color.set('#e8c99b');
+      this.topFill.color.set('#d8e4f0');
     }
   }
 
   /**
-   * Switches the active 3D map (`cathedral`, `warhall`, `sanctum`) and updates board, piece, and lighting themes.
+   * Switches the active 3D map (`cathedral`, `warhall`, `sanctum`, `classic`) and updates board, piece, and lighting themes.
    */
   public setMap(mapId: MapId): void {
     if (this.currentMapId === mapId && this.arena) return;
@@ -318,9 +371,13 @@ export class SceneManager {
       this.settings.quality !== 'low',
       mapId
     );
+    this.arena.group.visible = !this.menuShowcaseActive;
     this.scene.add(this.arena.group);
 
     this.chessboard.setMapTheme(mapId);
+    this.chessboard.setCoordinatesVisible(
+      this.settings.showCoordinates || mapId === 'classic'
+    );
     this.assetManager.applyMapTheme(mapId);
     this.applyMapAtmosphere(mapId);
     this.applyQualityTierSettings(false);
@@ -331,7 +388,7 @@ export class SceneManager {
   }
 
   /**
-   * Switches the active 3D Chess Piece Skin (`arcane_royalty`, `runic_warforged`, `mystic_sanctum`)
+   * Switches the active 3D Chess Piece Skin (`arcane_royalty`, `runic_warforged`, `mystic_sanctum`, `classic`)
    * and immediately rebuilds all pieces on the board with their distinct 3D silhouettes.
    */
   public setPieceSkin(skinId: PieceSkinId): void {
@@ -386,9 +443,10 @@ export class SceneManager {
       this.applyMapAtmosphere(this.currentMapId);
     }
 
-    // 4. Update Chessboard & Piece Materials
+    // 4. Update Chessboard, Piece Materials, and Dedicated Main Menu Hero Scene
     this.chessboard.setQuality(q);
     this.assetManager.setQuality(q);
+    this.menuHeroScene.setQuality(q);
 
     // 5. Combat FX & Particle settings (disabled in Low mode)
     const fxActive = !isLow && !this.settings.reducedMotion && this.settings.magicalFx;
@@ -406,6 +464,7 @@ export class SceneManager {
         !isLow,
         this.currentMapId
       );
+      this.arena.group.visible = !this.menuShowcaseActive;
       this.scene.add(this.arena.group);
     }
 
@@ -485,15 +544,47 @@ export class SceneManager {
     }
   }
 
+  /**
+   * Switches between the Dedicated Animated 3D Main Menu Presentation Scene (`enabled = true`)
+   * and the active in-game Match Board (`enabled = false`).
+   * The active match board is NEVER used as the Main Menu background.
+   */
   public setMenuShowcaseMode(enabled: boolean): void {
     this.menuShowcaseActive = enabled;
+    this.menuHeroScene.group.visible = enabled;
+    this.chessboard.group.visible = !enabled;
+    this.piecesGroup.visible = !enabled;
+    this.arena.group.visible = !enabled;
+
     if (enabled) {
       this.openingCinematic = null;
       this.cameraTween = null;
+      this.checkmateCutsceneCamera = null;
+      this.checkmateCutscenePending = false;
+      if (this.checkmateDelayTimer !== null) {
+        clearTimeout(this.checkmateDelayTimer);
+        this.checkmateDelayTimer = null;
+      }
+      this.controls.enabled = false;
       this.controls.minAzimuthAngle = -Infinity;
       this.controls.maxAzimuthAngle = Infinity;
-      this.controls.maxPolarAngle = Math.PI * 0.44;
+      this.controls.minDistance = 2.0;
+      this.controls.maxDistance = 12.0;
+      this.controls.maxPolarAngle = Math.PI * 0.48;
+      this.applyMapAtmosphere(this.currentMapId);
+
+      const isPortrait = this.isPortraitViewport();
+      if (isPortrait) {
+        this.camera.position.set(0.65, 2.15, 6.25);
+        this.controls.target.set(0.88, 1.75, 0);
+      } else {
+        this.camera.position.set(-0.08, 2.02, 5.75);
+        this.controls.target.set(0.28, 1.88, 0);
+      }
+      this.camera.lookAt(this.controls.target);
     } else {
+      this.controls.enabled = true;
+      this.applyMapAtmosphere(this.currentMapId);
       this.applyGameplayControlBounds(this.currentPreset);
     }
   }
@@ -505,7 +596,7 @@ export class SceneManager {
    */
   public playOpeningCinematic(playerColor: Color = 'w', onComplete?: () => void): void {
     this.activePlayerColor = playerColor;
-    this.menuShowcaseActive = false;
+    this.setMenuShowcaseMode(false);
 
     if (this.settings.reducedMotion) {
       this.setCameraPreset('gameplay', true);
@@ -711,12 +802,142 @@ export class SceneManager {
       this.lastSyncedSkin = activeSkin;
     }
 
-    if (snapshot.isGameOver && snapshot.resultReason === 'checkmate' && (fenChanged || Boolean(lastMove))) {
-      const losingKingSq = snapshot.kingInCheckSquare;
-      if (losingKingSq) {
-        const kingObj = this.pieceObjects.get(losingKingSq) ?? null;
-        this.animController.triggerCheckmateSequence(kingObj);
+    if (!snapshot.isGameOver) {
+      this.checkmateCutscenePending = false;
+      this.checkmateCutsceneCamera = null;
+      if (this.checkmateDelayTimer !== null) {
+        clearTimeout(this.checkmateDelayTimer);
+        this.checkmateDelayTimer = null;
       }
+    } else if (
+      snapshot.isGameOver &&
+      snapshot.resultReason === 'checkmate' &&
+      (fenChanged || Boolean(lastMove))
+    ) {
+      this.startCheckmateFinisherCutscene(snapshot, lastMove ? 340 : 0);
+    }
+  }
+
+  /**
+   * Launches the King vs King Checkmate Finisher Cutscene:
+   * - Locks camera & board interaction
+   * - Sweeps camera into a dramatic low three-quarter angle behind the Winning King facing the Defeated King
+   * - Triggers the skin-specific King vs King execution animation in `AnimationController`
+   * - Fires `onCheckmateCutsceneComplete` when finished so the Victory/Defeat Result Screen appears afterward
+   */
+  private startCheckmateFinisherCutscene(snapshot: GameStateSnapshot, delayMs = 0): void {
+    if (this.checkmateDelayTimer !== null) {
+      clearTimeout(this.checkmateDelayTimer);
+      this.checkmateDelayTimer = null;
+    }
+
+    this.checkmateCutscenePending = true;
+    this.openingCinematic = null;
+    this.cameraTween = null;
+
+    const launch = () => {
+      this.checkmateDelayTimer = null;
+      const losingColor: Color = snapshot.turn;
+      const winningColor: Color = losingColor === 'w' ? 'b' : 'w';
+
+      let losingKingObj: THREE.Group | null = null;
+      let winningKingObj: THREE.Group | null = null;
+
+      if (snapshot.kingInCheckSquare) {
+        losingKingObj = this.pieceObjects.get(snapshot.kingInCheckSquare) ?? null;
+      }
+      for (const obj of this.pieceObjects.values()) {
+        if (obj.userData?.type === 'k') {
+          if (obj.userData?.color === losingColor && !losingKingObj) {
+            losingKingObj = obj;
+          } else if (obj.userData?.color === winningColor && !winningKingObj) {
+            winningKingObj = obj;
+          }
+        }
+      }
+
+      if (!losingKingObj) {
+        this.checkmateCutscenePending = false;
+        this.onCheckmateCutsceneComplete?.();
+        return;
+      }
+
+      const losingPos = losingKingObj.position.clone();
+      const winningStart = winningKingObj
+        ? winningKingObj.position.clone()
+        : losingPos.clone().add(new THREE.Vector3(0, 0, losingColor === 'b' ? 2.2 : -2.2));
+
+      const approachDir = new THREE.Vector3().subVectors(losingPos, winningStart).setY(0);
+      if (approachDir.lengthSq() < 0.001) {
+        approachDir.set(0, 0, losingColor === 'b' ? -1 : 1);
+      } else {
+        approachDir.normalize();
+      }
+
+      const standoffPos = losingPos.clone().addScaledVector(approachDir, -1.45);
+      standoffPos.y = 0;
+
+      // Low dramatic 3/4 camera angle behind Winning King looking across at Defeated King (Reference Image 2)
+      const rightVec = new THREE.Vector3(-approachDir.z, 0, approachDir.x).normalize();
+      const cutsceneCamPos = standoffPos
+        .clone()
+        .addScaledVector(approachDir, -2.45)
+        .addScaledVector(rightVec, 1.55)
+        .setY(1.18);
+      cutsceneCamPos.x = Math.max(-5.6, Math.min(5.6, cutsceneCamPos.x));
+      cutsceneCamPos.z = Math.max(-5.6, Math.min(5.6, cutsceneCamPos.z));
+
+      const cutsceneTarget = new THREE.Vector3()
+        .lerpVectors(standoffPos, losingPos, 0.48)
+        .setY(0.88);
+
+      // Temporarily clear non-King bystanders from the King vs King execution stage so nothing blocks the camera
+      const hiddenBystanders: THREE.Group[] = [];
+      for (const obj of this.pieceObjects.values()) {
+        if (obj !== losingKingObj && obj !== winningKingObj && obj.visible) {
+          obj.visible = false;
+          hiddenBystanders.push(obj);
+        }
+      }
+
+      this.controls.enabled = false;
+      this.controls.minAzimuthAngle = -Infinity;
+      this.controls.maxAzimuthAngle = Infinity;
+      this.controls.maxPolarAngle = Math.PI * 0.48;
+
+      const duration = this.settings.reducedMotion ? 1.15 : 2.35;
+      this.checkmateCutsceneCamera = {
+        startPos: this.camera.position.clone(),
+        startTarget: this.controls.target.clone(),
+        standoffPos,
+        losingPos,
+        cutsceneCamPos,
+        cutsceneTarget,
+        elapsed: 0,
+        duration
+      };
+
+      const activeSkin = this.assetManager.getSkin();
+      this.animController.triggerCheckmateSequence(
+        losingKingObj,
+        winningKingObj,
+        activeSkin,
+        () => {
+          for (const obj of hiddenBystanders) {
+            obj.visible = true;
+          }
+          this.checkmateCutscenePending = false;
+          this.checkmateCutsceneCamera = null;
+          this.controls.enabled = true;
+          this.onCheckmateCutsceneComplete?.();
+        }
+      );
+    };
+
+    if (delayMs > 0) {
+      this.checkmateDelayTimer = window.setTimeout(launch, delayMs);
+    } else {
+      launch();
     }
   }
 
@@ -812,7 +1033,9 @@ export class SceneManager {
   public updateSettings(partial: Partial<SceneSettings>): void {
     const prevQuality = this.settings.quality;
     this.settings = { ...this.settings, ...partial };
-    this.chessboard.setCoordinatesVisible(this.settings.showCoordinates);
+    this.chessboard.setCoordinatesVisible(
+      this.settings.showCoordinates || this.currentMapId === 'classic'
+    );
 
     if (this.controls) {
       this.controls.rotateSpeed = 0.55 * this.settings.cameraSensitivity;
@@ -1137,17 +1360,62 @@ export class SceneManager {
       const delta = Math.min(0.25, this.clock.getDelta());
       const elapsed = this.clock.elapsedTime;
 
-      // 1. Update Main Menu slow background showcase camera
+      // 1. Update Dedicated Main Menu 3D Hero Scene & living camera drift
       if (this.menuShowcaseActive && !this.openingCinematic && !this.cameraTween) {
-        const angle = elapsed * 0.14 + 0.55;
-        const radius = 5.4;
-        this.camera.position.set(
-          Math.sin(angle) * radius,
-          2.65 + Math.sin(elapsed * 0.28) * 0.35,
-          Math.cos(angle) * radius
-        );
-        this.controls.target.set(0, 0.45, 0);
-        this.controls.update();
+        this.menuHeroScene.update(elapsed, delta, this.settings.reducedMotion);
+        const isPortrait = this.isPortraitViewport();
+        if (this.settings.reducedMotion) {
+          if (isPortrait) {
+            this.camera.position.set(0.65, 2.15, 6.25);
+            this.controls.target.set(0.88, 1.75, 0);
+          } else {
+            this.camera.position.set(-0.08, 2.02, 5.75);
+            this.controls.target.set(0.28, 1.88, 0);
+          }
+        } else {
+          const driftX = Math.sin(elapsed * 0.35) * 0.24;
+          const driftY = Math.cos(elapsed * 0.26) * 0.11;
+          const driftZ = Math.sin(elapsed * 0.22) * 0.18;
+          if (isPortrait) {
+            this.camera.position.set(0.65 + driftX * 0.7, 2.15 + driftY, 6.25 + driftZ);
+            this.controls.target.set(0.88, 1.75 + Math.sin(elapsed * 0.3) * 0.04, 0);
+          } else {
+            this.camera.position.set(-0.08 + driftX, 2.02 + driftY, 5.75 + driftZ);
+            this.controls.target.set(0.28, 1.88 + Math.sin(elapsed * 0.3) * 0.04, 0);
+          }
+        }
+        this.camera.lookAt(this.controls.target);
+      }
+      // 1b. Update King vs King Checkmate Finisher Cutscene Camera
+      else if (this.checkmateCutsceneCamera) {
+        const cam = this.checkmateCutsceneCamera;
+        cam.elapsed += delta;
+        const p = Math.min(1, cam.elapsed / cam.duration);
+
+        if (p < 0.26) {
+          // Sweep from gameplay camera into the low three-quarter King vs King standoff angle
+          const s = p / 0.26;
+          const ease = 1 - Math.pow(1 - s, 3);
+          this.camera.position.lerpVectors(cam.startPos, cam.cutsceneCamPos, ease);
+          this.controls.target.lerpVectors(cam.startTarget, cam.cutsceneTarget, ease);
+        } else {
+          // Slow dramatic push-in + subtle execution strike impact camera shake
+          const pushS = (p - 0.26) / 0.74;
+          const pushDir = new THREE.Vector3()
+            .subVectors(cam.losingPos, cam.cutsceneCamPos)
+            .normalize();
+          this.camera.position
+            .copy(cam.cutsceneCamPos)
+            .addScaledVector(pushDir, pushS * 0.16);
+          this.controls.target.copy(cam.cutsceneTarget);
+
+          if (!this.settings.reducedMotion && p >= 0.36 && p <= 0.56) {
+            const shakeEnv = Math.sin(((p - 0.36) / 0.2) * Math.PI);
+            this.camera.position.x += Math.sin(elapsed * 58) * 0.045 * shakeEnv;
+            this.camera.position.y += Math.cos(elapsed * 64) * 0.038 * shakeEnv;
+          }
+        }
+        this.camera.lookAt(this.controls.target);
       }
       // 2. Update Mode 1: Opening Cinematic Camera sequence
       else if (this.openingCinematic) {

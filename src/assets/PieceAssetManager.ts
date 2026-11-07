@@ -178,7 +178,14 @@ export class PieceAssetManager {
     const isMed = this.quality === 'medium';
 
     // Skin-specific tint nuances while preserving clear White vs Black readability
-    if (this.currentSkin === 'runic_warforged') {
+    if (this.currentSkin === 'classic') {
+      this.materials.w.body.color.set('#f6f1e6');
+      this.materials.w.gold.color.set('#d4a84f');
+      this.materials.w.steel.color.set('#d8dde4');
+      this.materials.b.body.color.set('#18181d');
+      this.materials.b.gold.color.set('#c89c42');
+      this.materials.b.steel.color.set('#7a828e');
+    } else if (this.currentSkin === 'runic_warforged') {
       this.materials.w.body.color.set('#e3dfd7');
       this.materials.w.gold.color.set('#df9b2e');
       this.materials.w.steel.color.set('#b4c0cc');

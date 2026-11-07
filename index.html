@@ -18,40 +18,93 @@
       <!-- 3D Three.js Canvas Mount -->
       <div id="canvas-container" aria-label="3D Wizard Chess Arena"></div>
 
-      <!-- Full-Screen Front-End Main Menu Overlay -->
+      <!-- Full-Screen Front-End Main Menu Overlay (Dedicated 3D Hero Scene Background) -->
       <section class="main-menu-overlay hidden" id="main-menu-screen" aria-label="Main Menu">
         <div class="main-menu-vignette"></div>
         <div class="main-menu-panel">
-          <div class="main-menu-crest">♔</div>
-          <h1 class="main-menu-title" id="menu-title">WIZARD CHESS</h1>
-          <p class="main-menu-subtitle" id="menu-subtitle">MOCHESS — ARCANE KINGDOM</p>
-          <p class="main-menu-tagline" id="menu-tagline">
-            Command living stone-and-gold armies across ancient medieval battle halls.
-          </p>
+          <div class="main-menu-brand-block">
+            <div class="main-menu-crest" aria-hidden="true">
+              <svg class="crown-emblem-svg" viewBox="0 0 64 44" fill="none">
+                <path
+                  d="M6 34L12 14L24 25L32 8L40 25L52 14L58 34H6Z"
+                  fill="url(#crownGrad)"
+                  stroke="#ffe29a"
+                  stroke-width="2"
+                />
+                <rect x="8" y="36" width="48" height="5" rx="2" fill="url(#crownGrad)" stroke="#ffe29a" stroke-width="1.5" />
+                <circle cx="12" cy="11" r="2.8" fill="#ffe8a8" />
+                <circle cx="32" cy="5" r="3.4" fill="#fff2c6" />
+                <circle cx="52" cy="11" r="2.8" fill="#ffe8a8" />
+                <defs>
+                  <linearGradient id="crownGrad" x1="32" y1="5" x2="32" y2="41" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#ffe7a4" />
+                    <stop offset="55%" stop-color="#d89b38" />
+                    <stop offset="100%" stop-color="#875614" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1 class="main-menu-title" id="menu-title">MOCHESS</h1>
+            <div class="main-menu-title-rule" aria-hidden="true">
+              <span class="rule-line"></span>
+              <span class="rule-diamond">◆</span>
+              <span class="rule-line"></span>
+            </div>
+            <p class="main-menu-subtitle" id="menu-subtitle">WIZARD CHESS — ARCANE KINGDOM</p>
+            <p class="main-menu-tagline" id="menu-tagline">
+              Command living stone-and-gold armies across ancient medieval battle halls.
+            </p>
+          </div>
 
-          <div class="main-menu-actions">
-            <button type="button" class="menu-primary-btn" id="btn-menu-play">Play</button>
-            <button type="button" class="menu-secondary-btn menu-online-btn" id="btn-menu-online">Online PvP</button>
-            <div class="menu-row-split">
-              <button type="button" class="menu-secondary-btn" id="btn-menu-maps">Map Selection</button>
-              <button type="button" class="menu-secondary-btn" id="btn-menu-settings">Settings</button>
-            </div>
-            <div class="menu-skin-selector" aria-label="Chess Piece Skin">
-              <span class="menu-skin-label" id="label-menu-skin">Chess Piece Skin (3D Sculpted Set)</span>
-              <div class="segmented-control" id="select-menu-skin">
-                <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-menu-skin-royalty">Arcane Royalty</button>
-                <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-menu-skin-warforged">Runic Warforged</button>
-                <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-menu-skin-sanctum">Mystic Sanctum</button>
-              </div>
-            </div>
-            <div class="menu-row-split">
-              <button type="button" class="menu-secondary-btn" id="btn-menu-lang">Language: EN</button>
-              <button type="button" class="menu-secondary-btn" id="btn-menu-credits">Credits</button>
-            </div>
+          <nav class="main-menu-actions" aria-label="Main Menu Navigation">
+            <button type="button" class="menu-ornate-btn menu-primary-btn" id="btn-menu-play">
+              <span class="menu-btn-icon" aria-hidden="true">⚔</span>
+              <span class="menu-btn-label" id="label-btn-menu-play">Play</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn menu-online-btn" id="btn-menu-online">
+              <span class="menu-btn-icon" aria-hidden="true">🌐</span>
+              <span class="menu-btn-label" id="label-btn-menu-online">Online PvP</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn" id="btn-menu-local">
+              <span class="menu-btn-icon" aria-hidden="true">👥</span>
+              <span class="menu-btn-label" id="label-btn-menu-local">Local Play</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn" id="btn-menu-maps">
+              <span class="menu-btn-icon" aria-hidden="true">🗺</span>
+              <span class="menu-btn-label" id="label-btn-menu-maps">Map Selection</span>
+              <span class="menu-btn-badge" id="menu-current-map-badge">Gothic Cathedral</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn" id="btn-menu-skins">
+              <span class="menu-btn-icon" aria-hidden="true">♞</span>
+              <span class="menu-btn-label" id="label-btn-menu-skins">Chess Skin</span>
+              <span class="menu-btn-badge" id="menu-current-skin-badge">Arcane Royalty</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn" id="btn-menu-settings">
+              <span class="menu-btn-icon" aria-hidden="true">⚙</span>
+              <span class="menu-btn-label" id="label-btn-menu-settings">Settings</span>
+            </button>
+
+            <button type="button" class="menu-ornate-btn menu-secondary-btn" id="btn-menu-credits">
+              <span class="menu-btn-icon" aria-hidden="true">⚜</span>
+              <span class="menu-btn-label" id="label-btn-menu-credits">Credits</span>
+            </button>
+          </nav>
+
+          <div class="main-menu-bottom-ornament" aria-hidden="true">
+            <span class="rule-line"></span>
+            <span class="rule-diamond">❖</span>
+            <span class="rule-line"></span>
           </div>
 
           <div class="main-menu-footer" id="menu-dev-footer">
             <div class="menu-footer-row">
+              <button type="button" class="menu-lang-pill" id="btn-menu-lang">Language: EN</button>
+              <span class="hud-divider"></span>
               <span class="menu-footer-sig" id="menu-footer-signature">Crafted with ❤️ by Dimas Mong</span>
               <span class="hud-divider"></span>
               <a
@@ -228,10 +281,96 @@
                   </p>
                 </div>
               </button>
+
+              <!-- Map 4: Classic Board -->
+              <button type="button" class="map-card" data-map="classic" id="card-map-classic">
+                <div class="map-card-preview preview-classic">
+                  <span class="map-card-tag">IV</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="map-title-classic">Classic Board</h3>
+                  <p class="map-card-desc" id="map-desc-classic">
+                    Traditional high-contrast cream &amp; walnut grandmaster study board with brass inlay, coordinates, and distraction-free clarity.
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="hud-btn hud-btn-gold" id="btn-maps-confirm">Select Arena</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dedicated Chess Skin Selection Modal -->
+      <div class="modal-backdrop hidden" id="skin-select-modal" role="dialog" aria-modal="true" aria-labelledby="skin-modal-title">
+        <div class="modal-card modal-card-wide">
+          <div class="modal-header">
+            <div>
+              <h2 id="skin-modal-title">Select Chess Piece Skin</h2>
+              <p class="modal-subtext" id="skin-modal-subtitle">
+                Choose a 3D army silhouette set — each skin features distinct piece geometry and a signature King vs King Checkmate Finisher.
+              </p>
+            </div>
+            <button type="button" class="modal-close" id="btn-close-skins" aria-label="Close Skin Selection">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="map-cards-grid skin-cards-grid" id="skin-cards-grid">
+              <!-- Skin 1: Arcane Royalty -->
+              <button type="button" class="map-card skin-card active" data-skin="arcane_royalty" id="card-skin-royalty">
+                <div class="map-card-preview preview-skin-royalty">
+                  <span class="map-card-tag">♔</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="skin-title-royalty">Arcane Royalty</h3>
+                  <p class="map-card-desc" id="skin-desc-royalty">
+                    Regal Cathedral Knights &amp; Sovereigns in polished ivory-marble, obsidian, and gilded gold with Solar Rune Judgment finisher.
+                  </p>
+                </div>
+              </button>
+
+              <!-- Skin 2: Runic Warforged -->
+              <button type="button" class="map-card skin-card" data-skin="runic_warforged" id="card-skin-warforged">
+                <div class="map-card-preview preview-skin-warforged">
+                  <span class="map-card-tag">♜</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="skin-title-warforged">Runic Warforged</h3>
+                  <p class="map-card-desc" id="skin-desc-warforged">
+                    Heavy angular warforged plate armor, tower shields, and horned helms with Molten Magma Hammer finisher.
+                  </p>
+                </div>
+              </button>
+
+              <!-- Skin 3: Mystic Sanctum -->
+              <button type="button" class="map-card skin-card" data-skin="mystic_sanctum" id="card-skin-sanctum">
+                <div class="map-card-preview preview-skin-sanctum">
+                  <span class="map-card-tag">♝</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="skin-title-sanctum">Mystic Sanctum</h3>
+                  <p class="map-card-desc" id="skin-desc-sanctum">
+                    Astral crystal sages, levitating orb-crowns, and crescent sanctum staves with Celestial Arcane Singularity finisher.
+                  </p>
+                </div>
+              </button>
+
+              <!-- Skin 4: Classic Staunton -->
+              <button type="button" class="map-card skin-card" data-skin="classic" id="card-skin-classic">
+                <div class="map-card-preview preview-skin-classic">
+                  <span class="map-card-tag">♞</span>
+                </div>
+                <div class="map-card-info">
+                  <h3 class="map-card-title" id="skin-title-classic">Classic Staunton</h3>
+                  <p class="map-card-desc" id="skin-desc-classic">
+                    Traditional championship Staunton turned-wood &amp; ivory chess silhouettes for maximum tactical clarity and Royal Sovereign Strike.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="hud-btn hud-btn-gold" id="btn-skins-confirm">Equip Skin</button>
           </div>
         </div>
       </div>
@@ -287,6 +426,7 @@
                 <button type="button" class="seg-btn active" data-map="cathedral" id="btn-lobby-map-cathedral">Gothic Cathedral</button>
                 <button type="button" class="seg-btn" data-map="warhall" id="btn-lobby-map-warhall">Royal War Hall</button>
                 <button type="button" class="seg-btn" data-map="sanctum" id="btn-lobby-map-sanctum">Arcane Sanctum</button>
+                <button type="button" class="seg-btn" data-map="classic" id="btn-lobby-map-classic">Classic Board</button>
               </div>
             </div>
 
@@ -296,6 +436,7 @@
                 <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-lobby-skin-royalty">Arcane Royalty</button>
                 <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-lobby-skin-warforged">Runic Warforged</button>
                 <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-lobby-skin-sanctum">Mystic Sanctum</button>
+                <button type="button" class="seg-btn" data-skin="classic" id="btn-lobby-skin-classic">Classic Staunton</button>
               </div>
             </div>
 
@@ -347,6 +488,7 @@
                 <button type="button" class="seg-btn active" data-skin="arcane_royalty" id="btn-setting-skin-royalty">Arcane Royalty</button>
                 <button type="button" class="seg-btn" data-skin="runic_warforged" id="btn-setting-skin-warforged">Runic Warforged</button>
                 <button type="button" class="seg-btn" data-skin="mystic_sanctum" id="btn-setting-skin-sanctum">Mystic Sanctum</button>
+                <button type="button" class="seg-btn" data-skin="classic" id="btn-setting-skin-classic">Classic Staunton</button>
               </div>
             </div>
 
@@ -496,6 +638,7 @@
                     <button type="button" class="seg-btn active" data-map="cathedral" id="btn-online-map-cathedral">Gothic Cathedral</button>
                     <button type="button" class="seg-btn" data-map="warhall" id="btn-online-map-warhall">Royal War Hall</button>
                     <button type="button" class="seg-btn" data-map="sanctum" id="btn-online-map-sanctum">Arcane Sanctum</button>
+                    <button type="button" class="seg-btn" data-map="classic" id="btn-online-map-classic">Classic Board</button>
                   </div>
                 </div>
 
@@ -620,7 +763,10 @@
         <div class="modal-card gameover-card">
           <div class="gameover-crest">♔</div>
           <h2 class="gameover-banner-title" id="gameover-title">CHECKMATE</h2>
-          <div class="gameover-winner-pill" id="gameover-winner-pill">White Wins</div>
+          <div class="gameover-badges-row">
+            <div class="gameover-winner-pill" id="gameover-winner-pill">White Wins</div>
+            <div class="gameover-mode-pill" id="gameover-mode-badge">Single Player • You: White</div>
+          </div>
           <p class="gameover-subtitle" id="gameover-subtitle">
             The White &amp; Gold Army triumphs in the Sanctum!
           </p>
@@ -628,6 +774,7 @@
           <div class="gameover-actions">
             <button type="button" class="hud-btn hud-btn-gold" id="btn-gameover-rematch">Rematch</button>
             <button type="button" class="hud-btn" id="btn-gameover-new">New Game</button>
+            <button type="button" class="hud-btn" id="btn-gameover-mainmenu">Main Menu</button>
             <button type="button" class="hud-btn" id="btn-gameover-lobby">Return to Lobby</button>
             <button type="button" class="hud-btn" id="btn-gameover-review">Review Board</button>
           </div>

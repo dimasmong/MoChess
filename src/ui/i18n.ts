@@ -5,6 +5,7 @@ export interface TranslationStrings {
   menuSubtitle: string;
   menuTagline: string;
   btnPlay: string;
+  btnLocalPlay: string;
   btnMapSelect: string;
   btnChessSkins: string;
   btnSettings: string;
@@ -18,6 +19,14 @@ export interface TranslationStrings {
   skinArcaneRoyalty: string;
   skinRunicWarforged: string;
   skinMysticSanctum: string;
+  skinClassic: string;
+  skinSelectTitle: string;
+  skinSelectSubtitle: string;
+  skinArcaneRoyaltyDesc: string;
+  skinRunicWarforgedDesc: string;
+  skinMysticSanctumDesc: string;
+  skinClassicDesc: string;
+  btnEquipSkin: string;
 
   // Turn & Status
   whiteToMove: string;
@@ -61,6 +70,8 @@ export interface TranslationStrings {
   mapWarHallDesc: string;
   mapSanctum: string;
   mapSanctumDesc: string;
+  mapClassic: string;
+  mapClassicDesc: string;
   btnSelectMap: string;
 
   // Lobby / Match Setup
@@ -212,12 +223,13 @@ export function saveLanguage(lang: Language): void {
 
 export const TRANSLATIONS: Record<Language, TranslationStrings> = {
   en: {
-    brandTitle: 'WIZARD CHESS',
-    menuSubtitle: 'MOCHESS — ARCANE KINGDOM',
+    brandTitle: 'MOCHESS',
+    menuSubtitle: 'WIZARD CHESS — ARCANE KINGDOM',
     menuTagline: 'Command living stone-and-gold armies across ancient medieval battle halls.',
     btnPlay: 'Play',
+    btnLocalPlay: 'Local Play',
     btnMapSelect: 'Map Selection',
-    btnChessSkins: 'Chess Skins',
+    btnChessSkins: 'Chess Skin',
     btnSettings: 'Settings',
     btnLanguage: 'Language',
     btnCredits: 'Credits',
@@ -228,6 +240,19 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     skinArcaneRoyalty: 'Arcane Royalty',
     skinRunicWarforged: 'Runic Warforged',
     skinMysticSanctum: 'Mystic Sanctum',
+    skinClassic: 'Classic Staunton',
+    skinSelectTitle: 'Select Chess Piece Skin',
+    skinSelectSubtitle:
+      'Choose a 3D army silhouette set — each skin features distinct piece geometry and a signature King vs King Checkmate Finisher.',
+    skinArcaneRoyaltyDesc:
+      'Regal Cathedral Knights & Sovereigns in polished ivory-marble, obsidian, and gilded gold with Solar Rune Judgment finisher.',
+    skinRunicWarforgedDesc:
+      'Heavy angular warforged plate armor, tower shields, and horned helms with Molten Magma Hammer finisher.',
+    skinMysticSanctumDesc:
+      'Astral crystal sages, levitating orb-crowns, and crescent sanctum staves with Celestial Arcane Singularity finisher.',
+    skinClassicDesc:
+      'Traditional championship Staunton turned-wood & ivory chess silhouettes for maximum tactical clarity and Royal Sovereign Strike.',
+    btnEquipSkin: 'Equip Skin',
 
     whiteToMove: 'White to Move',
     blackToMove: 'Black to Move',
@@ -268,6 +293,8 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     mapWarHallDesc: 'Fortified crimson-and-gold throne bastion with royal banners, dark granite pillars, and hearth firelight.',
     mapSanctum: 'Arcane Sanctum',
     mapSanctumDesc: 'Deep obsidian chamber encircled by levitating mana crystals, glowing ley-line runes, and mystic blue flames.',
+    mapClassic: 'Classic Board',
+    mapClassicDesc: 'Traditional high-contrast cream & walnut grandmaster study board with brass inlay, coordinates, and distraction-free clarity.',
     btnSelectMap: 'Select Arena',
 
     lobbyTitle: 'Match Setup — Sanctum Lobby',
@@ -400,10 +427,11 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     toastPieceBlocked: 'This piece has no legal moves available right now.'
   },
   id: {
-    brandTitle: 'CATUR PENYIHIR',
-    menuSubtitle: 'MOCHESS — KERAJAAN ARKANA',
+    brandTitle: 'MOCHESS',
+    menuSubtitle: 'CATUR PENYIHIR — KERAJAAN ARKANA',
     menuTagline: 'Pimpin pasukan batu-dan-emas hidup di aula pertempuran abad pertengahan kuno.',
-    btnPlay: 'Main Sekarang',
+    btnPlay: 'Main',
+    btnLocalPlay: 'Main Lokal',
     btnMapSelect: 'Pilihan Peta',
     btnChessSkins: 'Skin Bidak',
     btnSettings: 'Pengaturan',
@@ -416,6 +444,19 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     skinArcaneRoyalty: 'Royalti Arkana',
     skinRunicWarforged: 'Tempa-Rune',
     skinMysticSanctum: 'Sanktum Mistis',
+    skinClassic: 'Staunton Klasik',
+    skinSelectTitle: 'Pilih Skin Bidak Catur',
+    skinSelectSubtitle:
+      'Pilih set siluet pasukan 3D — setiap skin memiliki geometri bidak unik dan animasi penutup Skakmat Raja vs Raja.',
+    skinArcaneRoyaltyDesc:
+      'Ksatria & Penguasa Katedral marmer gading, obsidian, dan emas murni dengan serangan akhir Penghakiman Rune Surya.',
+    skinRunicWarforgedDesc:
+      'Baja tempa perang bersegi tegas, perisai menara, dan helm bertanduk dengan serangan akhir Palu Magma.',
+    skinMysticSanctumDesc:
+      'Pertapa kristal astral, mahkota bola melayang, dan tongkat bulan sabit dengan serangan akhir Singularitas Arkana.',
+    skinClassicDesc:
+      'Siluet bidak catur Staunton kejuaraan tradisional dari kayu bubut & gading untuk kejelasan taktis maksimal.',
+    btnEquipSkin: 'Gunakan Skin',
 
     whiteToMove: 'Giliran Putih',
     blackToMove: 'Giliran Hitam',
@@ -456,6 +497,8 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     mapWarHallDesc: 'Benteng takhta merah-dan-emas dengan panji kerajaan, pilar granit gelap, dan perapian hangat.',
     mapSanctum: 'Sanktum Arkana',
     mapSanctumDesc: 'Ruang obsidian dalam yang dikelilingi kristal mana melayang, rune bercahaya, dan api biru mistis.',
+    mapClassic: 'Papan Klasik',
+    mapClassicDesc: 'Papan catur ruang studi grandmaster tradisional kontras tinggi warna krem & kenari dengan tatahan kuningan dan koordinat jelas.',
     btnSelectMap: 'Pilih Arena',
 
     lobbyTitle: 'Pengaturan Laga — Lobi Sanktum',
@@ -593,5 +636,14 @@ export function getMapTitle(mapId: MapId, lang: Language): string {
   const t = TRANSLATIONS[lang];
   if (mapId === 'warhall') return t.mapWarHall;
   if (mapId === 'sanctum') return t.mapSanctum;
+  if (mapId === 'classic') return t.mapClassic;
   return t.mapCathedral;
+}
+
+export function getSkinTitle(skinId: string, lang: Language): string {
+  const t = TRANSLATIONS[lang];
+  if (skinId === 'runic_warforged') return t.skinRunicWarforged;
+  if (skinId === 'mystic_sanctum') return t.skinMysticSanctum;
+  if (skinId === 'classic') return t.skinClassic;
+  return t.skinArcaneRoyalty;
 }

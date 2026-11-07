@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import tls from 'node:tls';
 
-export type MapId = 'cathedral' | 'warhall' | 'sanctum';
+export type MapId = 'cathedral' | 'warhall' | 'sanctum' | 'classic';
 export type TimeControlMinutes = 0 | 3 | 5 | 10 | 15;
 export type OnlineRoomStatus = 'waiting' | 'playing' | 'finished';
 
@@ -708,7 +708,7 @@ export class OnlineRoomService {
           ? 'w'
           : 'b';
 
-    const validMaps: MapId[] = ['cathedral', 'warhall', 'sanctum'];
+    const validMaps: MapId[] = ['cathedral', 'warhall', 'sanctum', 'classic'];
     const mapId: MapId =
       params.mapId && validMaps.includes(params.mapId) ? params.mapId : 'cathedral';
 

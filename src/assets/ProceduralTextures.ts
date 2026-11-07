@@ -81,7 +81,12 @@ export function createMarbleTextures(
         let rBase = 222;
         let gBase = 214;
         let bBase = 200;
-        if (mapId === 'warhall') {
+        if (mapId === 'classic') {
+          // Clean, traditional tournament ivory/cream with minimal grain
+          rBase = 240;
+          gBase = 234;
+          bBase = 220;
+        } else if (mapId === 'warhall') {
           // Warm champagne travertine stone
           rBase = 216;
           gBase = 198;
@@ -92,14 +97,15 @@ export function createMarbleTextures(
           gBase = 220;
           bBase = 236;
         }
-        const delta = Math.round((vein - 0.5) * 22);
-        colorData[idx] = Math.min(248, Math.max(155, rBase + delta));
-        colorData[idx + 1] = Math.min(245, Math.max(150, gBase + delta));
+        const veinScale = mapId === 'classic' ? 6 : 22;
+        const delta = Math.round((vein - 0.5) * veinScale);
+        colorData[idx] = Math.min(250, Math.max(155, rBase + delta));
+        colorData[idx + 1] = Math.min(248, Math.max(150, gBase + delta));
         colorData[idx + 2] = Math.min(248, Math.max(140, bBase + delta));
         colorData[idx + 3] = 255;
 
         // Higher satin roughness (105..150 out of 255 -> ~0.45..0.58) to eliminate harsh reflections
-        const rough = Math.round(108 + (1 - vein) * 42);
+        const rough = mapId === 'classic' ? 168 : Math.round(108 + (1 - vein) * 42);
         roughData[idx] = rough;
         roughData[idx + 1] = rough;
         roughData[idx + 2] = rough;
@@ -109,7 +115,12 @@ export function createMarbleTextures(
         let rBase = 20;
         let gBase = 22;
         let bBase = 28;
-        if (mapId === 'warhall') {
+        if (mapId === 'classic') {
+          // Classic deep walnut/ebony tournament square
+          rBase = 34;
+          gBase = 29;
+          bBase = 26;
+        } else if (mapId === 'warhall') {
           // Deep charred bronze-basalt
           rBase = 28;
           gBase = 22;
@@ -120,12 +131,13 @@ export function createMarbleTextures(
           gBase = 20;
           bBase = 36;
         }
-        colorData[idx] = Math.min(68, Math.max(10, rBase + Math.round(vFactor * 20 + n * 6)));
-        colorData[idx + 1] = Math.min(70, Math.max(10, gBase + Math.round(vFactor * 20 + n * 6)));
-        colorData[idx + 2] = Math.min(86, Math.max(14, bBase + Math.round(vFactor * 26 + n * 8)));
+        const grainScale = mapId === 'classic' ? 6 : 20;
+        colorData[idx] = Math.min(68, Math.max(10, rBase + Math.round(vFactor * grainScale + n * 4)));
+        colorData[idx + 1] = Math.min(70, Math.max(10, gBase + Math.round(vFactor * grainScale + n * 4)));
+        colorData[idx + 2] = Math.min(86, Math.max(14, bBase + Math.round(vFactor * grainScale + n * 5)));
         colorData[idx + 3] = 255;
 
-        const rough = Math.round(112 + vFactor * 44);
+        const rough = mapId === 'classic' ? 172 : Math.round(112 + vFactor * 44);
         roughData[idx] = rough;
         roughData[idx + 1] = rough;
         roughData[idx + 2] = rough;
@@ -240,7 +252,38 @@ export function createRuneBoardFrameTexture(size = 1024, mapId: MapId = 'cathedr
   const ctx = canvas.getContext('2d');
   if (!ctx) return makeFallbackTexture(18, 18, 22);
 
-  // 1. Base stone color per map
+  // 1. Base stone / wood color per map
+  if (mapId === 'classic') {
+    // Clean classic ebony & walnut tournament border without fantasy runes
+    ctx.fillStyle = '#181411';
+    ctx.fillRect(0, 0, size, size);
+
+    const outerPad = size * 0.052;
+    const innerPad = size * 0.132;
+    ctx.strokeStyle = '#c89e4c';
+    ctx.lineWidth = Math.max(2, size * 0.0036);
+    ctx.strokeRect(outerPad, outerPad, size - outerPad * 2, size - outerPad * 2);
+    ctx.strokeRect(innerPad, innerPad, size - innerPad * 2, size - innerPad * 2);
+
+    // Subtle corner brass rosettes (classic geometric squares)
+    const bandCenter = (outerPad + innerPad) * 0.5;
+    const r = (innerPad - outerPad) * 0.22;
+    for (const [cx, cy] of [
+      [bandCenter, bandCenter],
+      [size - bandCenter, bandCenter],
+      [bandCenter, size - bandCenter],
+      [size - bandCenter, size - bandCenter]
+    ]) {
+      ctx.strokeRect(cx - r, cy - r, r * 2, r * 2);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
   if (mapId === 'warhall') {
     ctx.fillStyle = '#1c1110';
   } else if (mapId === 'sanctum') {

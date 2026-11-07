@@ -47,6 +47,74 @@ export function buildCastleArena(
   const group = new THREE.Group();
   group.name = `WizardChessArena_${mapId}`;
 
+  if (mapId === 'classic') {
+    const isLow = quality === 'low';
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#1a1715'),
+      roughness: 0.86,
+      metalness: 0.04
+    });
+    const daisMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#26211d'),
+      roughness: 0.72,
+      metalness: 0.08
+    });
+    const brassTrimMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#c69c46'),
+      roughness: 0.36,
+      metalness: 0.78
+    });
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#141210'),
+      roughness: 0.90,
+      metalness: 0.02
+    });
+
+    // Clean matte grandmaster floor
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(44, 44), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.18;
+    floor.receiveShadow = !isLow;
+    group.add(floor);
+
+    // Subtle circular tournament table dais & brass inlay ring beneath the board
+    const dais = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 7.6, 0.08, 48), daisMat);
+    dais.position.y = -0.15;
+    dais.receiveShadow = !isLow;
+    group.add(dais);
+
+    const brassRing = new THREE.Mesh(
+      new THREE.RingGeometry(7.05, 7.18, 64),
+      brassTrimMat
+    );
+    brassRing.rotation.x = -Math.PI / 2;
+    brassRing.position.y = -0.105;
+    group.add(brassRing);
+
+    // Clean, distraction-free architectural gallery perimeter
+    const wallDist = 18.5;
+    const wallHeight = 12;
+    for (const [wx, wz, ry] of [
+      [0, -wallDist, 0],
+      [0, wallDist, Math.PI],
+      [-wallDist, 0, Math.PI / 2],
+      [wallDist, 0, -Math.PI / 2]
+    ] as Array<[number, number, number]>) {
+      const wMesh = new THREE.Mesh(new THREE.PlaneGeometry(wallDist * 2, wallHeight), wallMat);
+      wMesh.position.set(wx, wallHeight * 0.5 - 0.18, wz);
+      wMesh.rotation.y = ry;
+      group.add(wMesh);
+    }
+
+    return {
+      group,
+      mapId,
+      braziers: [],
+      floatingCrystals: [],
+      embers: null
+    };
+  }
+
   const texSize = getAdaptiveTextureSize(quality, isMobile);
   const masonry = createMasonryWallTexture(texSize, mapId);
   masonry.map.repeat.set(6, 3);

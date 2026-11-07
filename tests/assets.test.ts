@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPieceGeometryParts } from '../src/assets/PieceGeometryBuilder';
 import { PieceAssetManager } from '../src/assets/PieceAssetManager';
 import { ChessboardBuilder } from '../src/scene/ChessboardBuilder';
+import { buildMenuHeroScene } from '../src/scene/MenuHeroSceneBuilder';
 import { soundManager, MAP_MUSIC_TRACKS } from '../src/audio/SoundManager';
 import type { PieceSkinId, PieceSymbol } from '../src/engine/types';
 
@@ -82,8 +83,8 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     expect(blackKnight.rotation.y).toBeCloseTo(0);
   });
 
-  it('builds 3 distinct 3D sculpted chess skins (arcane_royalty, runic_warforged, mystic_sanctum) with different geometry shapes', () => {
-    const skins: PieceSkinId[] = ['arcane_royalty', 'runic_warforged', 'mystic_sanctum'];
+  it('builds 4 distinct 3D sculpted chess skins (arcane_royalty, runic_warforged, mystic_sanctum, classic) with different geometry shapes', () => {
+    const skins: PieceSkinId[] = ['arcane_royalty', 'runic_warforged', 'mystic_sanctum', 'classic'];
 
     for (const sym of symbols) {
       const counts = skins.map((skin) => {
@@ -94,15 +95,35 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
           parts.steel.getAttribute('position').count
         );
       });
-      // Verify all 3 skins produce valid 3D meshes and differ in sculpted geometry vertex counts
+      // Verify all 4 skins produce valid 3D meshes and differ in sculpted geometry vertex counts
       expect(counts[0]).toBeGreaterThan(100);
       expect(counts[1]).toBeGreaterThan(100);
       expect(counts[2]).toBeGreaterThan(100);
-      expect(new Set(counts).size).toBe(3);
+      expect(counts[3]).toBeGreaterThan(100);
+      expect(new Set(counts).size).toBe(4);
     }
+
+    // Verify Classic Staunton Knight has traditional horse silhouette with minimal placeholder steel/face (no humanoid rider)
+    const classicKnight = getPieceGeometryParts('n', 'high', 'classic');
+    expect(classicKnight.body.getAttribute('position').count).toBeGreaterThan(250);
+    expect(classicKnight.steel.getAttribute('position').count).toBeLessThan(30);
+    expect(classicKnight.face.getAttribute('position').count).toBeLessThan(30);
   });
 
-  it('applies True Low Graphics Mode vs Medium and High on PieceAssetManager and ChessboardBuilder', () => {
+  it('builds and animates the dedicated 3D Main Menu Hero King Pedestal Scene in High and Low graphics modes', () => {
+    const heroHigh = buildMenuHeroScene('high', false);
+    expect(heroHigh.group.children.length).toBeGreaterThan(5);
+    expect(heroHigh.heroPieceGroup.position.x).toBeCloseTo(1.18, 1);
+
+    const initialRotY = heroHigh.runeRibbon1.rotation.y;
+    heroHigh.update(1.5, 0.016, false);
+    expect(heroHigh.runeRibbon1.rotation.y).not.toBe(initialRotY);
+
+    heroHigh.setQuality('low');
+    expect(heroHigh.godRays[0].visible).toBe(false);
+  });
+
+  it('applies True Low Graphics Mode vs Medium and High on PieceAssetManager and ChessboardBuilder, and supports Classic Map', () => {
     const manager = new PieceAssetManager('low', true);
     const whiteMat = manager.getMaterials('w');
     expect(whiteMat.body.clearcoat).toBe(0);
@@ -112,6 +133,9 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     manager.setQuality('high');
     expect(whiteMat.body.clearcoat).toBeGreaterThan(0.2);
     expect(whiteMat.body.envMapIntensity).toBeGreaterThan(0.3);
+
+    manager.setSkin('classic');
+    expect(manager.getSkin()).toBe('classic');
 
     const board = new ChessboardBuilder('low', true, 'cathedral');
     const a1Mesh = board.tileMeshes.get('a1')!;
@@ -123,9 +147,12 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     board.setQuality('high');
     expect(darkMat.clearcoat).toBeGreaterThan(0.1);
     expect(darkMat.envMapIntensity).toBeGreaterThan(0.3);
+
+    board.setMapTheme('classic');
+    expect(board.coordinatesGroup.visible).toBe(true);
   });
 
-  it('switches Map-Specific Music tracks automatically for cathedral, warhall, and sanctum and supports ON/OFF toggle', () => {
+  it('switches Map-Specific Music tracks automatically for cathedral, warhall, sanctum, and classic and supports ON/OFF toggle', () => {
     soundManager.setMusicEnabled(true);
     soundManager.setMapMusic('cathedral');
     expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.cathedral.trackId);
@@ -135,6 +162,9 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
 
     soundManager.setMapMusic('sanctum');
     expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.sanctum.trackId);
+
+    soundManager.setMapMusic('classic');
+    expect(soundManager.getMusicStatus().trackId).toBe(MAP_MUSIC_TRACKS.classic.trackId);
 
     soundManager.setMusicEnabled(false);
     expect(soundManager.getMusicStatus().enabled).toBe(false);

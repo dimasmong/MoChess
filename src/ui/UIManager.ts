@@ -62,6 +62,7 @@ export class UIManager {
   private capturedByBlackEl = document.getElementById('captured-by-black')!;
 
   private mapSelectModal = document.getElementById('map-select-modal')!;
+  private skinSelectModal = document.getElementById('skin-select-modal')!;
   private lobbyModal = document.getElementById('lobby-modal')!;
   private onlineModal = document.getElementById('online-modal')!;
   private settingsModal = document.getElementById('settings-modal')!;
@@ -70,6 +71,7 @@ export class UIManager {
   private gameoverModal = document.getElementById('gameover-modal')!;
   private gameoverTitleEl = document.getElementById('gameover-title')!;
   private gameoverWinnerPillEl = document.getElementById('gameover-winner-pill')!;
+  private gameoverModeBadgeEl = document.getElementById('gameover-mode-badge');
   private gameoverSubtitleEl = document.getElementById('gameover-subtitle')!;
   private gameoverRematchStatusEl = document.getElementById('gameover-rematch-status')!;
 
@@ -118,9 +120,17 @@ export class UIManager {
       }
     });
 
+    this.scene.setOnCheckmateCutsceneComplete(() => {
+      const snap = this.engine.getSnapshot();
+      if (snap.isGameOver) {
+        this.presentGameOverModal(snap);
+      }
+    });
+
     this.bindUIEvents();
     this.applyTranslations();
     this.syncSkinButtons(this.draftConfig.skinId ?? 'arcane_royalty');
+    this.syncMapCards();
 
     const initMap = this.draftConfig.mapId ?? 'cathedral';
     soundManager.setMapMusic(initMap);
@@ -142,12 +152,29 @@ export class UIManager {
     this.syncSkinButtons(skinId);
   }
 
+  private getSkinDisplayName(skinId: PieceSkinId): string {
+    const t = TRANSLATIONS[this.lang];
+    if (skinId === 'runic_warforged') return t.skinRunicWarforged;
+    if (skinId === 'mystic_sanctum') return t.skinMysticSanctum;
+    if (skinId === 'classic') return t.skinClassic;
+    return t.skinArcaneRoyalty;
+  }
+
   private syncSkinButtons(skinId: PieceSkinId): void {
-    const selectors = ['#select-menu-skin .seg-btn', '#select-lobby-skin .seg-btn', '#select-setting-skin .seg-btn'];
+    const selectors = [
+      '#select-menu-skin .seg-btn',
+      '#select-lobby-skin .seg-btn',
+      '#select-setting-skin .seg-btn',
+      '#skin-cards-grid .skin-card'
+    ];
     for (const sel of selectors) {
       document.querySelectorAll(sel).forEach((b) => {
         b.classList.toggle('active', (b as HTMLElement).dataset.skin === skinId);
       });
+    }
+    const skinBadge = document.getElementById('menu-current-skin-badge');
+    if (skinBadge) {
+      skinBadge.textContent = this.getSkinDisplayName(skinId);
     }
   }
 
@@ -169,7 +196,16 @@ export class UIManager {
 
   public showMainMenu(visible: boolean): void {
     this.mainMenuScreen.classList.toggle('hidden', !visible);
+    document.getElementById('hud-top-bar')?.classList.toggle('hidden', visible);
+    document.getElementById('hud-bottom-bar')?.classList.toggle('hidden', visible);
+    if (visible) {
+      this.historyDrawer?.classList.add('hidden');
+    }
     this.scene.setMenuShowcaseMode(visible);
+    if (visible) {
+      this.syncMapCards();
+      this.syncSkinButtons(this.draftConfig.skinId ?? this.engine.getConfig().skinId ?? 'arcane_royalty');
+    }
   }
 
   public isMainMenuVisible(): boolean {
@@ -197,6 +233,7 @@ export class UIManager {
     const t = TRANSLATIONS[this.lang];
     if (mapId === 'warhall') return t.mapWarHall;
     if (mapId === 'sanctum') return t.mapSanctum;
+    if (mapId === 'classic') return t.mapClassic;
     return t.mapCathedral;
   }
 
@@ -226,18 +263,16 @@ export class UIManager {
 
     // Main Menu
     setText('menu-title', t.brandTitle);
-    setText('menu-subtitle', t.menuSubtitle);
+    setText('menu-subtitle', `✦ ${t.menuSubtitle} ✦`);
     setText('menu-tagline', t.menuTagline);
-    setText('btn-menu-play', t.btnPlay);
-    setText('btn-menu-online', t.btnOnlinePvP);
-    setText('btn-menu-maps', t.btnMapSelect);
-    setText('btn-menu-settings', t.btnSettings);
-    setText('label-menu-skin', t.labelPieceSkin);
-    setText('btn-menu-skin-royalty', t.skinArcaneRoyalty);
-    setText('btn-menu-skin-warforged', t.skinRunicWarforged);
-    setText('btn-menu-skin-sanctum', t.skinMysticSanctum);
+    setText('label-btn-menu-play', t.btnPlay);
+    setText('label-btn-menu-online', t.btnOnlinePvP);
+    setText('label-btn-menu-local', t.btnLocalPlay);
+    setText('label-btn-menu-maps', t.btnMapSelect);
+    setText('label-btn-menu-skins', t.btnChessSkins);
+    setText('label-btn-menu-settings', t.btnSettings);
+    setText('label-btn-menu-credits', t.btnCredits);
     setText('btn-menu-lang', `${t.btnLanguage}: ${this.lang.toUpperCase()}`);
-    setText('btn-menu-credits', t.btnCredits);
     setText('btn-skip-intro', t.btnSkipIntro);
 
     // Top & Bottom HUD
@@ -271,7 +306,22 @@ export class UIManager {
     setText('map-desc-warhall', t.mapWarHallDesc);
     setText('map-title-sanctum', t.mapSanctum);
     setText('map-desc-sanctum', t.mapSanctumDesc);
+    setText('map-title-classic', t.mapClassic);
+    setText('map-desc-classic', t.mapClassicDesc);
     setText('btn-maps-confirm', t.btnSelectMap);
+
+    // Skin Selection Modal
+    setText('skin-modal-title', t.skinSelectTitle);
+    setText('skin-modal-subtitle', t.skinSelectSubtitle);
+    setText('skin-title-royalty', t.skinArcaneRoyalty);
+    setText('skin-desc-royalty', t.skinArcaneRoyaltyDesc);
+    setText('skin-title-warforged', t.skinRunicWarforged);
+    setText('skin-desc-warforged', t.skinRunicWarforgedDesc);
+    setText('skin-title-sanctum', t.skinMysticSanctum);
+    setText('skin-desc-sanctum', t.skinMysticSanctumDesc);
+    setText('skin-title-classic', t.skinClassic);
+    setText('skin-desc-classic', t.skinClassicDesc);
+    setText('btn-skins-confirm', t.btnEquipSkin);
 
     // Lobby Modal
     setText('lobby-title', t.lobbyTitle);
@@ -296,10 +346,12 @@ export class UIManager {
     setText('btn-lobby-map-cathedral', t.mapCathedral);
     setText('btn-lobby-map-warhall', t.mapWarHall);
     setText('btn-lobby-map-sanctum', t.mapSanctum);
+    setText('btn-lobby-map-classic', t.mapClassic);
     setText('label-lobby-skin', t.labelPieceSkin);
     setText('btn-lobby-skin-royalty', t.skinArcaneRoyalty);
     setText('btn-lobby-skin-warforged', t.skinRunicWarforged);
     setText('btn-lobby-skin-sanctum', t.skinMysticSanctum);
+    setText('btn-lobby-skin-classic', t.skinClassic);
     setText('label-camera-preset', t.labelCameraPreset);
     setText('btn-cam-gameplay', t.camGameplay);
     setText('btn-cam-top', t.camOverhead);
@@ -321,6 +373,7 @@ export class UIManager {
     setText('btn-online-map-cathedral', t.mapCathedral);
     setText('btn-online-map-warhall', t.mapWarHall);
     setText('btn-online-map-sanctum', t.mapSanctum);
+    setText('btn-online-map-classic', t.mapClassic);
     setText('btn-online-create-submit', t.btnCreateRoomSubmit);
     setText('label-room-code-input', t.labelRoomCodeInput);
     if (this.inputRoomCode) {
@@ -348,6 +401,7 @@ export class UIManager {
     setText('btn-setting-skin-royalty', t.skinArcaneRoyalty);
     setText('btn-setting-skin-warforged', t.skinRunicWarforged);
     setText('btn-setting-skin-sanctum', t.skinMysticSanctum);
+    setText('btn-setting-skin-classic', t.skinClassic);
     setText('label-setting-volume', t.settingVolume);
     setText('label-setting-music', t.settingMusic);
     setText('label-setting-sfx', t.settingSfx);
@@ -385,6 +439,7 @@ export class UIManager {
     // Game Over Modal Buttons
     setText('btn-gameover-rematch', t.btnRematch);
     setText('btn-gameover-new', t.btnNewGame);
+    setText('btn-gameover-mainmenu', t.btnMainMenu);
     setText('btn-gameover-lobby', t.btnReturnLobby);
     setText('btn-gameover-review', t.btnReviewBoard);
 
@@ -617,7 +672,12 @@ export class UIManager {
       const gameOverKey = `${snapshot.fen}:${snapshot.resultReason}:${snapshot.winner}`;
       if (this.lastGameOverShownKey !== gameOverKey) {
         this.lastGameOverShownKey = gameOverKey;
-        this.presentGameOverModal(snapshot);
+        if (snapshot.resultReason === 'checkmate' && this.scene.isCheckmateCutscenePlaying()) {
+          // Delay showing the Victory/Defeat Result Screen until the King vs King Checkmate Finisher Cutscene finishes!
+          this.gameoverModal.classList.add('hidden');
+        } else {
+          this.presentGameOverModal(snapshot);
+        }
       }
     } else {
       this.lastGameOverShownKey = null;
@@ -723,6 +783,9 @@ export class UIManager {
 
   private presentGameOverModal(snapshot: GameStateSnapshot): void {
     const t = TRANSLATIONS[this.lang];
+    if (this.gameoverModeBadgeEl) {
+      this.gameoverModeBadgeEl.textContent = this.modeBadgeEl.textContent ?? '';
+    }
     if (snapshot.winner === 'draw') {
       this.gameoverTitleEl.textContent =
         snapshot.resultReason === 'stalemate' ? t.stalemateTitle : t.drawTitle;
@@ -757,6 +820,7 @@ export class UIManager {
     this.lobbyModal.classList.add('hidden');
     this.onlineModal.classList.add('hidden');
     this.mapSelectModal.classList.add('hidden');
+    this.skinSelectModal?.classList.add('hidden');
     this.gameoverModal.classList.add('hidden');
 
     this.engine.startNewGame(config);
@@ -795,10 +859,23 @@ export class UIManager {
       this.openOnlineModal('create');
     });
 
+    document.getElementById('btn-menu-local')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.draftConfig = { ...this.engine.getConfig(), mode: 'local' };
+      this.syncLobbyControlsWithDraft();
+      this.lobbyModal.classList.remove('hidden');
+    });
+
     document.getElementById('btn-menu-maps')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.syncMapCards();
       this.mapSelectModal.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-menu-skins')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.syncSkinButtons(this.draftConfig.skinId ?? this.engine.getConfig().skinId ?? 'arcane_royalty');
+      this.skinSelectModal?.classList.remove('hidden');
     });
 
     document.getElementById('btn-menu-settings')?.addEventListener('click', () => {
@@ -943,11 +1020,25 @@ export class UIManager {
     document.getElementById('btn-maps-confirm')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.mapSelectModal.classList.add('hidden');
-      if (this.isMainMenuVisible()) {
-        this.draftConfig = this.engine.getConfig();
-        this.syncLobbyControlsWithDraft();
-        this.lobbyModal.classList.remove('hidden');
-      }
+      this.syncMapCards();
+    });
+
+    // 3B. Dedicated Chess Skin Selection Modal Interactions
+    document.getElementById('btn-close-skins')?.addEventListener('click', () => {
+      this.skinSelectModal?.classList.add('hidden');
+    });
+
+    document.querySelectorAll('#skin-cards-grid .skin-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        soundManager.playSelect();
+        const skinId = ((card as HTMLElement).dataset.skin as PieceSkinId) ?? 'arcane_royalty';
+        this.setPieceSkin(skinId);
+      });
+    });
+
+    document.getElementById('btn-skins-confirm')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.skinSelectModal?.classList.add('hidden');
     });
 
     // 4. Lobby Modal Interactions
@@ -1267,6 +1358,15 @@ export class UIManager {
       this.startMatchWithIntro(this.engine.getConfig());
     });
 
+    document.getElementById('btn-gameover-mainmenu')?.addEventListener('click', () => {
+      soundManager.playSelect();
+      this.gameoverModal.classList.add('hidden');
+      if (this.engine.getConfig().mode === 'online') {
+        onlineClient.leaveRoom();
+      }
+      this.showMainMenu(true);
+    });
+
     document.getElementById('btn-gameover-lobby')?.addEventListener('click', () => {
       soundManager.playSelect();
       this.gameoverModal.classList.add('hidden');
@@ -1305,6 +1405,10 @@ export class UIManager {
     document.querySelectorAll('#map-cards-grid .map-card').forEach((card) => {
       card.classList.toggle('active', (card as HTMLElement).dataset.map === activeMap);
     });
+    const mapBadge = document.getElementById('menu-current-map-badge');
+    if (mapBadge) {
+      mapBadge.textContent = this.getMapDisplayName(activeMap);
+    }
   }
 
   private syncLobbyControlsWithDraft(): void {
