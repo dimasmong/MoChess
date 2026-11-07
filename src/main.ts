@@ -52,31 +52,34 @@ function bootstrap(): void {
   );
 
   const triggerAIMove = async (): Promise<void> => {
-    if (engine.isGameOver() || engine.getConfig().mode === 'online') return;
+    if (engine.isGameOver() || engine.getConfig().mode === 'online' || !engine.isAITurn()) return;
     const token = ++aiRequestToken;
     ui.setAIThinking(true);
 
     const fen = engine.getFen();
     const diff = engine.getConfig().aiDifficulty;
 
-    // Natural pacing delay so human move / combat animation completes cleanly
-    await new Promise((r) => setTimeout(r, 340));
-    if (token !== aiRequestToken || engine.isGameOver() || engine.getFen() !== fen) {
-      ui.setAIThinking(false);
-      return;
-    }
+    try {
+      // Natural pacing delay so human move / combat animation completes cleanly
+      await new Promise((r) => setTimeout(r, 340));
+      if (token !== aiRequestToken || engine.isGameOver() || engine.getFen() !== fen || !engine.isAITurn()) {
+        return;
+      }
 
-    const bestMove = await aiManager.computeBestMove(fen, diff);
-    if (token !== aiRequestToken || engine.isGameOver() || engine.getFen() !== fen) {
-      ui.setAIThinking(false);
-      return;
-    }
+      const bestMove = await aiManager.computeBestMove(fen, diff);
+      if (token !== aiRequestToken || engine.isGameOver() || engine.getFen() !== fen || !engine.isAITurn()) {
+        return;
+      }
 
-    ui.setAIThinking(false);
-    if (bestMove && !engine.isGameOver()) {
-      const result = engine.executeMove(bestMove.from, bestMove.to, bestMove.promotion ?? 'q');
-      if (result.valid && result.move) {
-        soundManager.playForMove(result.move);
+      if (bestMove && !engine.isGameOver()) {
+        const result = engine.executeMove(bestMove.from, bestMove.to, bestMove.promotion ?? 'q');
+        if (result.valid && result.move) {
+          soundManager.playForMove(result.move);
+        }
+      }
+    } finally {
+      if (token === aiRequestToken) {
+        ui.setAIThinking(false);
       }
     }
   };
@@ -86,29 +89,63 @@ function bootstrap(): void {
   });
 
   function handleBoardSquareTap(square: Square): void {
-    // Disallow board interaction when game is over, main menu is open, or AI is computing
+    // Disallow board interaction when game is over or main menu is open
     if (engine.isGameOver() || ui.isMainMenuVisible()) {
       return;
     }
-    if (engine.isAITurn() && aiManager.isThinking()) {
+
+    // In Single Player vs AI mode, disallow moving during AI's turn and ensure AI is triggered if idle
+    if (engine.isAITurn()) {
+      ui.showTurnOrBlockedFeedback('ai_thinking');
+      if (!aiManager.isThinking()) {
+        void triggerAIMove();
+      }
       return;
+    }
+
+    // In Online PvP mode, enforce waiting-for-opponent and turn ownership with clear feedback
+    if (engine.getConfig().mode === 'online') {
+      const onlineSnap = onlineClient.getSnapshot();
+      if (
+        (onlineSnap.active && onlineSnap.room && onlineSnap.room.status === 'waiting') ||
+        engine.getConfig().onlineStatus === 'waiting'
+      ) {
+        ui.showTurnOrBlockedFeedback('waiting_opponent');
+        return;
+      }
+      if (!engine.isHumanTurn()) {
+        ui.showTurnOrBlockedFeedback(
+          engine.getTurn() === 'w' ? 'opponent_turn_w' : 'opponent_turn_b'
+        );
+        return;
+      }
     }
 
     const res = engine.handleSquareInteraction(square);
     if ('action' in res) {
       if (res.action === 'selected') {
         soundManager.playSelect();
+        if (res.destinations.length === 0) {
+          const reason = engine.getNoMovesReason(square);
+          if (reason) {
+            ui.showTurnOrBlockedFeedback(reason);
+          }
+        } else {
+          ui.hideFeedbackToast();
+        }
       }
       return;
     }
 
     if (res.requiresPromotion) {
       soundManager.playSelect();
+      ui.hideFeedbackToast();
       ui.showPromotionModal(true);
       return;
     }
 
     if (res.valid && res.move) {
+      ui.hideFeedbackToast();
       soundManager.playForMove(res.move);
       if (engine.getConfig().mode === 'online') {
         void onlineClient

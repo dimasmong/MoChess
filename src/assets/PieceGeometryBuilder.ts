@@ -714,25 +714,25 @@ function buildKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   // Left Flank: Crusader Heater Shield
   addCrossHeaterShield([-0.25, 0.72, 0.06], [0, -Math.PI * 0.42, 0], 0.88, bodyList, goldList);
 
-  // Right Flank: Couched Jousting Lance / Spear angled forward (+Z)
+  // Right Flank: Couched Jousting Lance / Spear angled forward (+Z), kept cleanly within square bounds
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.018, 0.022, 0.55, 10), {
-      rotation: [1.15, 0, 0],
-      position: [0.24, 0.68, 0.02]
+    prepGeo(new THREE.CylinderGeometry(0.018, 0.022, 0.48, 10), {
+      rotation: [1.08, 0, 0],
+      position: [0.24, 0.68, -0.02]
     })
   );
   // Gold Vamplate Hand-cone on Lance
   goldList.push(
     prepGeo(new THREE.ConeGeometry(0.065, 0.10, 12), {
-      rotation: [1.15, 0, 0],
-      position: [0.24, 0.74, 0.14]
+      rotation: [1.08, 0, 0],
+      position: [0.24, 0.74, 0.09]
     })
   );
-  // Steel Lance Tip extending forward
+  // Steel Lance Tip extending forward (within z <= 0.44)
   steelList.push(
-    prepGeo(new THREE.ConeGeometry(0.038, 0.46, 8), {
-      rotation: [1.15, 0, 0],
-      position: [0.24, 0.84, 0.36]
+    prepGeo(new THREE.ConeGeometry(0.038, 0.38, 8), {
+      rotation: [1.08, 0, 0],
+      position: [0.24, 0.84, 0.27]
     })
   );
 
@@ -1603,9 +1603,9 @@ function buildWarforgedKnightGeometry(_detail: PieceDetailLevel): PieceMeshParts
   // Twin Flank Weapons: Left Tower Shield + Right Heavy Diamond War-Lance
   addWarforgedTowerShield([-0.24, 0.66, 0.08], [0, -Math.PI * 0.38, 0], 0.85, bodyList, goldList, steelList);
   steelList.push(
-    prepGeo(new THREE.ConeGeometry(0.06, 0.68, 4), {
-      rotation: [1.22, Math.PI / 4, 0],
-      position: [0.24, 0.78, 0.26],
+    prepGeo(new THREE.ConeGeometry(0.06, 0.52, 4), {
+      rotation: [1.12, Math.PI / 4, 0],
+      position: [0.24, 0.78, 0.18],
       flatShaded: true
     })
   );
@@ -2127,9 +2127,9 @@ function buildSanctumKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
 
   // Long Spiraled Golden Unicorn Horn projecting from the steed's brow!
   goldList.push(
-    prepGeo(new THREE.ConeGeometry(0.038, 0.46, 8), {
-      rotation: [0.78, 0, 0],
-      position: [0, 1.15, 0.34]
+    prepGeo(new THREE.ConeGeometry(0.038, 0.38, 8), {
+      rotation: [0.74, 0, 0],
+      position: [0, 1.14, 0.27]
     })
   );
 

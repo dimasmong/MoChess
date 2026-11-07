@@ -181,6 +181,13 @@ export interface TranslationStrings {
   onlineStatusReconnecting: string;
   rematchWaitingOpponent: string;
   rematchOpponentRequested: string;
+  toastWaitOpponentJoin: string;
+  toastOpponentTurnWhite: string;
+  toastOpponentTurnBlack: string;
+  toastAIThinking: string;
+  toastPieceInCheckNoMoves: string;
+  toastPiecePinned: string;
+  toastPieceBlocked: string;
 }
 
 const LANG_STORAGE_KEY = 'mochess_language_v2';
@@ -383,7 +390,14 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     onlineStatusOpponentReconnecting: 'Opponent Reconnecting...',
     onlineStatusReconnecting: 'Reconnecting...',
     rematchWaitingOpponent: 'Rematch requested — waiting for opponent...',
-    rematchOpponentRequested: 'Opponent requested a rematch! Click Rematch to accept.'
+    rematchOpponentRequested: 'Opponent requested a rematch! Click Rematch to accept.',
+    toastWaitOpponentJoin: 'Waiting for opponent to join the room before making a move.',
+    toastOpponentTurnWhite: "Opponent's Turn — Waiting for White to move.",
+    toastOpponentTurnBlack: "Opponent's Turn — Waiting for Black to move.",
+    toastAIThinking: 'AI is thinking — Waiting for AI move...',
+    toastPieceInCheckNoMoves: 'King is in Check! Select a piece that can block or escape check.',
+    toastPiecePinned: 'This piece is pinned to your King and cannot move legally.',
+    toastPieceBlocked: 'This piece has no legal moves available right now.'
   },
   id: {
     brandTitle: 'CATUR PENYIHIR',
@@ -564,7 +578,14 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     onlineStatusOpponentReconnecting: 'Lawan Menyambung Ulang...',
     onlineStatusReconnecting: 'Menyambung Ulang...',
     rematchWaitingOpponent: 'Tanding ulang diminta — menunggu lawan...',
-    rematchOpponentRequested: 'Lawan meminta tanding ulang! Klik Tanding Ulang untuk menerima.'
+    rematchOpponentRequested: 'Lawan meminta tanding ulang! Klik Tanding Ulang untuk menerima.',
+    toastWaitOpponentJoin: 'Menunggu lawan bergabung ke ruang sebelum melangkah.',
+    toastOpponentTurnWhite: 'Giliran Lawan — Menunggu Putih melangkah.',
+    toastOpponentTurnBlack: 'Giliran Lawan — Menunggu Hitam melangkah.',
+    toastAIThinking: 'AI sedang berpikir — Menunggu langkah AI...',
+    toastPieceInCheckNoMoves: 'Raja sedang Skak! Pilih bidak yang dapat melindungi atau meloloskan Raja.',
+    toastPiecePinned: 'Bidak ini terikat (pinned) melindungi Raja dan tidak dapat bergerak.',
+    toastPieceBlocked: 'Bidak ini belum memiliki langkah sah saat ini.'
   }
 };
 

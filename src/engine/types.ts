@@ -82,6 +82,7 @@ export interface GameConfig {
   mapId?: MapId;
   skinId?: PieceSkinId;
   onlineRoomCode?: string;
+  onlineStatus?: OnlineRoomStatus;
 }
 
 export type OnlineRoomStatus = 'waiting' | 'playing' | 'finished';

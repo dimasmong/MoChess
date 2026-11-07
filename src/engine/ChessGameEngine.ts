@@ -142,7 +142,38 @@ export class ChessGameEngine {
   public isHumanTurn(): boolean {
     if (this.isGameOver()) return false;
     if (this.config.mode === 'local') return true;
+    if (this.config.mode === 'online' && this.config.onlineStatus === 'waiting') {
+      return false;
+    }
     return this.chess.turn() === this.config.playerColor;
+  }
+
+  /**
+   * Explains why a friendly piece at `square` currently has 0 legal moves:
+   * - `'in_check'` if the side to move is currently in check and this piece cannot resolve check
+   * - `'pinned'` if moving/removing this piece would expose its own King to attack (absolute pin)
+   * - `'blocked'` if its movement rays/targets are blocked by friendly pieces
+   * - `null` if the piece has at least 1 legal move or is not a friendly piece
+   */
+  public getNoMovesReason(square: Square): 'in_check' | 'pinned' | 'blocked' | null {
+    const piece = this.chess.get(square);
+    if (!piece || piece.color !== this.chess.turn()) return null;
+    const legal = this.getLegalDestinationsForSquare(square);
+    if (legal.length > 0) return null;
+    if (this.chess.inCheck()) return 'in_check';
+
+    if (piece.type !== 'k') {
+      try {
+        const probe = new Chess(this.chess.fen());
+        probe.remove(square);
+        if (probe.inCheck()) {
+          return 'pinned';
+        }
+      } catch {
+        // Fallback if probe FEN is non-standard
+      }
+    }
+    return 'blocked';
   }
 
   public isAITurn(): boolean {
@@ -266,17 +297,21 @@ export class ChessGameEngine {
 
   public selectSquare(square: Square | null): LegalDestination[] {
     if (!square || this.isGameOver() || (this.config.mode === 'online' && !this.isHumanTurn())) {
-      this.selectedSquare = null;
-      this.legalDestinations = [];
-      this.emit();
+      if (this.selectedSquare !== null || this.legalDestinations.length > 0) {
+        this.selectedSquare = null;
+        this.legalDestinations = [];
+        this.emit();
+      }
       return [];
     }
 
     const piece = this.chess.get(square);
     if (!piece || piece.color !== this.chess.turn()) {
-      this.selectedSquare = null;
-      this.legalDestinations = [];
-      this.emit();
+      if (this.selectedSquare !== null || this.legalDestinations.length > 0) {
+        this.selectedSquare = null;
+        this.legalDestinations = [];
+        this.emit();
+      }
       return [];
     }
 
@@ -606,6 +641,7 @@ export class ChessGameEngine {
     const prevMode = this.config.mode;
     const prevColor = this.config.playerColor;
     const prevRoomCode = this.config.onlineRoomCode;
+    const prevStatus = this.config.onlineStatus;
     const prevMap = this.config.mapId;
 
     this.config = {
@@ -614,13 +650,15 @@ export class ChessGameEngine {
       playerColor,
       mapId: room.mapId,
       timeControlMinutes: room.timeControlMinutes,
-      onlineRoomCode: room.roomCode
+      onlineRoomCode: room.roomCode,
+      onlineStatus: room.status
     };
 
     const configChanged =
       prevMode !== 'online' ||
       prevColor !== playerColor ||
       prevRoomCode !== room.roomCode ||
+      prevStatus !== room.status ||
       prevMap !== room.mapId;
 
     // 1. Check if the server room was reset for a rematch

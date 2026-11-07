@@ -38,6 +38,8 @@ export class UIManager {
   private mainMenuScreen = document.getElementById('main-menu-screen')!;
   private cinematicSkipBar = document.getElementById('cinematic-skip-bar')!;
   private cinematicMapLabel = document.getElementById('cinematic-map-label')!;
+  private feedbackToastEl = document.getElementById('hud-feedback-toast');
+  private feedbackToastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private turnDotEl = document.getElementById('turn-dot')!;
   private turnTextEl = document.getElementById('turn-text')!;
@@ -524,6 +526,65 @@ export class UIManager {
     this.updateStatusHeader(this.engine.getSnapshot());
   }
 
+  public showFeedbackToast(message: string, tone: 'info' | 'warn' = 'info', durationMs = 2400): void {
+    if (!this.feedbackToastEl) return;
+    if (this.feedbackToastTimer) {
+      clearTimeout(this.feedbackToastTimer);
+      this.feedbackToastTimer = null;
+    }
+    this.feedbackToastEl.textContent = message;
+    this.feedbackToastEl.classList.toggle('warn', tone === 'warn');
+    this.feedbackToastEl.classList.remove('hidden');
+    this.feedbackToastTimer = setTimeout(() => {
+      this.feedbackToastEl?.classList.add('hidden');
+      this.feedbackToastTimer = null;
+    }, durationMs);
+  }
+
+  public hideFeedbackToast(): void {
+    if (this.feedbackToastTimer) {
+      clearTimeout(this.feedbackToastTimer);
+      this.feedbackToastTimer = null;
+    }
+    this.feedbackToastEl?.classList.add('hidden');
+  }
+
+  public showTurnOrBlockedFeedback(
+    reason:
+      | 'waiting_opponent'
+      | 'opponent_turn_w'
+      | 'opponent_turn_b'
+      | 'ai_thinking'
+      | 'in_check'
+      | 'pinned'
+      | 'blocked'
+  ): void {
+    const t = TRANSLATIONS[this.lang];
+    switch (reason) {
+      case 'waiting_opponent':
+        this.showFeedbackToast(t.toastWaitOpponentJoin, 'info');
+        break;
+      case 'opponent_turn_w':
+        this.showFeedbackToast(t.toastOpponentTurnWhite, 'info');
+        break;
+      case 'opponent_turn_b':
+        this.showFeedbackToast(t.toastOpponentTurnBlack, 'info');
+        break;
+      case 'ai_thinking':
+        this.showFeedbackToast(t.toastAIThinking, 'info');
+        break;
+      case 'in_check':
+        this.showFeedbackToast(t.toastPieceInCheckNoMoves, 'warn');
+        break;
+      case 'pinned':
+        this.showFeedbackToast(t.toastPiecePinned, 'warn');
+        break;
+      case 'blocked':
+        this.showFeedbackToast(t.toastPieceBlocked, 'info');
+        break;
+    }
+  }
+
   public showPromotionModal(show: boolean): void {
     this.promotionModal.classList.toggle('hidden', !show);
   }
@@ -892,9 +953,17 @@ export class UIManager {
     // 4. Lobby Modal Interactions
     document.getElementById('btn-close-lobby')?.addEventListener('click', () => {
       this.lobbyModal.classList.add('hidden');
+      if (!this.isMainMenuVisible() && this.engine.isAITurn()) {
+        this.onTriggerAIMove();
+      }
     });
     document.getElementById('btn-lobby-resume')?.addEventListener('click', () => {
+      soundManager.playSelect();
       this.lobbyModal.classList.add('hidden');
+      this.showMainMenu(false);
+      if (this.engine.isAITurn()) {
+        this.onTriggerAIMove();
+      }
     });
     document.getElementById('btn-lobby-mainmenu')?.addEventListener('click', () => {
       soundManager.playSelect();
@@ -1158,7 +1227,13 @@ export class UIManager {
         if (res.valid && res.move) {
           soundManager.playPromote();
           if (this.engine.getConfig().mode === 'online') {
-            void onlineClient.submitMove(res.move.from, res.move.to, res.move.promotion);
+            void onlineClient
+              .submitMove(res.move.from, res.move.to, res.move.promotion)
+              .then((onlineRes) => {
+                if (!onlineRes.ok) {
+                  this.engine.undo(true);
+                }
+              });
           } else if (this.engine.isAITurn()) {
             this.onTriggerAIMove();
           }

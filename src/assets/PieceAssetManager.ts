@@ -20,8 +20,23 @@ export interface FactionMaterialSet {
   face: THREE.MeshStandardMaterial;
 }
 
+const HITBOX_TOP_BY_PIECE: Record<PieceSymbol, number> = {
+  p: 0.92,
+  r: 1.14,
+  n: 1.20,
+  b: 1.24,
+  q: 1.34,
+  k: 1.44
+};
+
+const NOOP_RAYCAST = (): void => {
+  // Decorative visual sub-meshes delegate picking to the piece's bounded selection hitbox
+};
+
 export class PieceAssetManager {
   private glbParts = new Map<PieceSymbol, PieceMeshParts>();
+  private hitboxGeos = new Map<PieceSymbol, THREE.BufferGeometry>();
+  private hitboxMat: THREE.MeshBasicMaterial;
   private glbLoaded = false;
   private materials: Record<Color, FactionMaterialSet>;
   private contactShadowGeo: THREE.RingGeometry;
@@ -112,6 +127,31 @@ export class PieceAssetManager {
       opacity: 0.32,
       depthWrite: false
     });
+
+    this.hitboxMat = new THREE.MeshBasicMaterial({
+      name: 'PieceSelectionHitboxMaterial',
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      colorWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    for (const sym of ['p', 'r', 'n', 'b', 'q', 'k'] as PieceSymbol[]) {
+      const topY = HITBOX_TOP_BY_PIECE[sym];
+      const profile = [
+        new THREE.Vector2(0.001, 0.0),
+        new THREE.Vector2(0.41, 0.0),
+        new THREE.Vector2(0.41, 0.26),
+        new THREE.Vector2(0.32, 0.56),
+        new THREE.Vector2(0.25, topY),
+        new THREE.Vector2(0.001, topY)
+      ];
+      const geo = new THREE.LatheGeometry(profile, 12);
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+      this.hitboxGeos.set(sym, geo);
+    }
 
     this.idleClip = this.createIdleAnimationClip();
     this.attackClip = this.createAttackAnimationClip();
@@ -381,7 +421,15 @@ export class PieceAssetManager {
     const contactShadow = new THREE.Mesh(this.contactShadowGeo, this.contactShadowMat);
     contactShadow.position.y = 0.006;
     contactShadow.name = 'contact_shadow';
+    contactShadow.raycast = NOOP_RAYCAST;
     root.add(contactShadow);
+
+    // Dedicated watertight, skin-invariant selection hitbox centered on the square
+    const hitboxGeo = this.hitboxGeos.get(type)!;
+    const hitboxMesh = new THREE.Mesh(hitboxGeo, this.hitboxMat);
+    hitboxMesh.name = 'piece_hitbox';
+    hitboxMesh.userData.isPieceHitbox = true;
+    root.add(hitboxMesh);
 
     const facingYaw = color === 'w' ? Math.PI : 0;
     root.rotation.y = facingYaw;
@@ -390,6 +438,7 @@ export class PieceAssetManager {
     root.userData.idleAction = idleAction;
     root.userData.attackAction = attackAction;
     root.userData.rigGroup = rigGroup;
+    root.userData.hitboxMesh = hitboxMesh;
 
     this.tagPieceMetadata(root, type, color, square, facingYaw);
     return root;
@@ -408,21 +457,25 @@ export class PieceAssetManager {
     bodyMesh.name = 'body';
     bodyMesh.castShadow = castShadows;
     bodyMesh.receiveShadow = true;
+    bodyMesh.raycast = NOOP_RAYCAST;
 
     const goldMesh = new THREE.Mesh(parts.gold, matSet.gold);
     goldMesh.name = 'gold';
     goldMesh.castShadow = castShadows;
     goldMesh.receiveShadow = true;
+    goldMesh.raycast = NOOP_RAYCAST;
 
     const steelMesh = new THREE.Mesh(parts.steel, matSet.steel);
     steelMesh.name = 'steel';
     steelMesh.castShadow = castShadows;
     steelMesh.receiveShadow = true;
+    steelMesh.raycast = NOOP_RAYCAST;
 
     const faceMesh = new THREE.Mesh(parts.face, matSet.face);
     faceMesh.name = 'face';
     faceMesh.castShadow = castShadows;
     faceMesh.receiveShadow = true;
+    faceMesh.raycast = NOOP_RAYCAST;
 
     group.add(bodyMesh, goldMesh, steelMesh, faceMesh);
     return group;

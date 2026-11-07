@@ -13,7 +13,7 @@ import type {
 import { PieceAssetManager } from '../assets/PieceAssetManager';
 import type { QualityTier } from '../assets/ProceduralTextures';
 import { buildCastleArena, type ArenaElements } from './CastleArenaBuilder';
-import { ChessboardBuilder, squareToWorldPosition } from './ChessboardBuilder';
+import { ChessboardBuilder, squareToWorldPosition, worldPositionToSquare } from './ChessboardBuilder';
 import { AnimationController } from './AnimationController';
 
 export type CameraPreset = 'gameplay' | 'top' | 'cinematic' | 'white' | 'black';
@@ -60,6 +60,8 @@ export class SceneManager {
   private menuShowcaseActive = false;
   private envTexture: THREE.Texture | null = null;
   private lastSnapshot: GameStateSnapshot | null = null;
+  private lastSyncedFen: string | null = null;
+  private lastSyncedSkin: PieceSkinId | null = null;
 
   private cameraTween: {
     startPos: THREE.Vector3;
@@ -79,7 +81,10 @@ export class SceneManager {
   } | null = null;
 
   private pointerDownPos = { x: 0, y: 0, time: 0 };
+  private activePointerId: number | null = null;
+  private isPointerDown = false;
   private isDraggingCamera = false;
+  private skippedIntroOnPointerDown = false;
   private activeTouchCount = 0;
   private animationFrameId: number | null = null;
   private contextLostBanner: HTMLElement | null = null;
@@ -476,7 +481,7 @@ export class SceneManager {
       this.controls.maxPolarAngle = Math.PI * 0.43;
       this.controls.minAzimuthAngle = -Infinity;
       this.controls.maxAzimuthAngle = Infinity;
-      this.controls.maxDistance = isPortrait ? 16.5 : 12.2;
+      this.controls.maxDistance = isPortrait ? 19.8 : 15.5;
     }
   }
 
@@ -524,7 +529,7 @@ export class SceneManager {
   }
 
   /**
-   * Immediately skips the Opening Cinematic Camera and snaps/transitions into the centered Gameplay Chess Camera.
+   * Immediately skips the Opening Cinematic Camera and snaps into the centered Gameplay Chess Camera.
    */
   public skipOpeningCinematic(): void {
     if (!this.openingCinematic) return;
@@ -532,7 +537,7 @@ export class SceneManager {
     this.openingCinematic = null;
     this.controls.enabled = true;
     this.onCinematicStateChange?.(false);
-    this.setCameraPreset('gameplay', false);
+    this.setCameraPreset('gameplay', true);
     cb?.();
   }
 
@@ -584,26 +589,39 @@ export class SceneManager {
           endTarget: new THREE.Vector3(0, 0, 0)
         };
       case 'cinematic':
+        if (isPortrait) {
+          return {
+            endPos: new THREE.Vector3(2.4 * zSign, 16.8, 5.4 * zSign),
+            endTarget: new THREE.Vector3(0, -0.25, 0.55 * zSign)
+          };
+        }
         return {
-          endPos: new THREE.Vector3(2.68, 2.24, -4.38),
-          endTarget: new THREE.Vector3(-0.32, 0.52, 1.32)
+          endPos: new THREE.Vector3(2.3 * zSign, 12.2, 5.4 * zSign),
+          endTarget: new THREE.Vector3(0, -0.3, 0.65 * zSign)
         };
       case 'black':
         return {
-          endPos: new THREE.Vector3(-1.35, 2.15, -5.55),
-          endTarget: new THREE.Vector3(0, 0.65, 1.2)
+          endPos: new THREE.Vector3(-1.8, 11.8, -5.4),
+          endTarget: new THREE.Vector3(0, -0.25, -0.55)
         };
       case 'white':
         return {
-          endPos: new THREE.Vector3(-2.45, 2.45, 5.35),
-          endTarget: new THREE.Vector3(0, 0.52, -1.1)
+          endPos: new THREE.Vector3(-1.8, 11.8, 5.4),
+          endTarget: new THREE.Vector3(0, -0.25, 0.55)
         };
     }
   }
 
-  public setCameraPreset(preset: CameraPreset, immediate = false, playerColor?: Color): void {
-    if (playerColor) {
-      this.activePlayerColor = playerColor;
+  public setCameraPreset(
+    preset: CameraPreset,
+    immediateOrColor: boolean | Color = false,
+    playerColor?: Color
+  ): void {
+    const immediate = typeof immediateOrColor === 'boolean' ? immediateOrColor : false;
+    const resolvedColor =
+      typeof immediateOrColor === 'string' ? immediateOrColor : playerColor;
+    if (resolvedColor) {
+      this.activePlayerColor = resolvedColor;
     }
     if (this.openingCinematic) {
       this.openingCinematic = null;
@@ -634,11 +652,15 @@ export class SceneManager {
       startTarget: this.controls.target.clone(),
       endTarget,
       elapsed: 0,
-      duration: 0.72,
+      duration: 0.45,
       onComplete: () => {
         this.applyGameplayControlBounds(preset);
       }
     };
+  }
+
+  public isCameraTweening(): boolean {
+    return this.cameraTween !== null;
   }
 
   public getCameraPreset(): CameraPreset {
@@ -655,6 +677,8 @@ export class SceneManager {
 
   /**
    * Synchronizes the 3D pieces and board highlights with the authoritative `GameStateSnapshot`.
+   * Rebuilds 3D piece meshes ONLY when the board FEN or skin actually changes (and no animated move is provided),
+   * so selecting or deselecting a piece never destroys/recreates meshes or interrupts active animations.
    */
   public syncWithSnapshot(snapshot: GameStateSnapshot, lastMove?: MoveRecord): void {
     this.lastSnapshot = snapshot;
@@ -673,13 +697,21 @@ export class SceneManager {
       snapshot.kingInCheckSquare
     );
 
+    const activeSkin = this.assetManager.getSkin();
+    const skinChanged = activeSkin !== this.lastSyncedSkin;
+    const fenChanged = snapshot.fen !== this.lastSyncedFen;
+
     if (lastMove) {
       this.applyAnimatedMove(snapshot, lastMove);
-    } else {
+      this.lastSyncedFen = snapshot.fen;
+      this.lastSyncedSkin = activeSkin;
+    } else if (fenChanged || skinChanged || this.pieceObjects.size === 0) {
       this.rebuildAllPieces(snapshot);
+      this.lastSyncedFen = snapshot.fen;
+      this.lastSyncedSkin = activeSkin;
     }
 
-    if (snapshot.isGameOver && snapshot.resultReason === 'checkmate') {
+    if (snapshot.isGameOver && snapshot.resultReason === 'checkmate' && (fenChanged || Boolean(lastMove))) {
       const losingKingSq = snapshot.kingInCheckSquare;
       if (losingKingSq) {
         const kingObj = this.pieceObjects.get(losingKingSq) ?? null;
@@ -744,6 +776,8 @@ export class SceneManager {
       this.piecesGroup.remove(obj);
     }
     this.pieceObjects.clear();
+    this.lastSyncedFen = snapshot.fen;
+    this.lastSyncedSkin = this.assetManager.getSkin();
 
     const fenBoard = snapshot.fen.split(' ')[0];
     const rows = fenBoard.split('/');
@@ -825,38 +859,65 @@ export class SceneManager {
 
     dom.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
+      this.activePointerId = e.pointerId;
+      this.isPointerDown = true;
       this.pointerDownPos = { x: e.clientX, y: e.clientY, time: performance.now() };
       this.isDraggingCamera = this.activeTouchCount > 1;
+      this.skippedIntroOnPointerDown = false;
+
       if (this.openingCinematic) {
+        this.skippedIntroOnPointerDown = true;
         this.skipOpeningCinematic();
         return;
       }
       if (this.cameraTween) {
         const done = this.cameraTween.onComplete;
+        this.camera.position.copy(this.cameraTween.endPos);
+        this.controls.target.copy(this.cameraTween.endTarget);
         this.cameraTween = null;
         done?.();
+        this.controls.update();
       }
     });
 
     dom.addEventListener('pointermove', (e) => {
+      if (!this.isPointerDown || (this.activePointerId !== null && e.pointerId !== this.activePointerId)) {
+        return;
+      }
       const dx = e.clientX - this.pointerDownPos.x;
       const dy = e.clientY - this.pointerDownPos.y;
-      if (dx * dx + dy * dy > 36) {
+      const maxTapDistSq = e.pointerType === 'touch' ? 576 : 196; // 24px touch tolerance, 14px mouse tolerance
+      if (dx * dx + dy * dy > maxTapDistSq) {
         this.isDraggingCamera = true;
       }
     });
 
+    const resetPointerState = () => {
+      this.isPointerDown = false;
+      this.activePointerId = null;
+      this.activeTouchCount = 0;
+    };
+
     dom.addEventListener('pointerup', (e) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
+      if (this.activePointerId !== null && e.pointerId !== this.activePointerId) {
+        return;
+      }
       const dx = e.clientX - this.pointerDownPos.x;
       const dy = e.clientY - this.pointerDownPos.y;
-      const elapsed = performance.now() - this.pointerDownPos.time;
+      const maxTapDistSq = e.pointerType === 'touch' ? 576 : 196;
 
-      if (!this.isDraggingCamera && dx * dx + dy * dy <= 36 && elapsed < 650) {
+      if (
+        !this.skippedIntroOnPointerDown &&
+        !this.isDraggingCamera &&
+        dx * dx + dy * dy <= maxTapDistSq
+      ) {
         this.handleCanvasTap(e.clientX, e.clientY);
       }
-      this.activeTouchCount = 0;
+      resetPointerState();
     });
+
+    dom.addEventListener('pointercancel', resetPointerState);
 
     window.addEventListener('resize', this.handleResize);
 
@@ -890,27 +951,156 @@ export class SceneManager {
     }
   }
 
-  private handleCanvasTap(clientX: number, clientY: number): void {
+  /**
+   * Projects a 3D board square (`a1`..`h8`) at height `yOffset` into viewport client coordinates `(x, y)`.
+   */
+  public getSquareScreenPosition(square: Square, yOffset = 0.05): { x: number; y: number } {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    const w = rect.width || window.innerWidth;
+    const h = rect.height || window.innerHeight;
+    this.camera.updateMatrixWorld();
+    const worldPos = squareToWorldPosition(square, yOffset);
+    const projected = worldPos.project(this.camera);
+    return {
+      x: rect.left + ((projected.x + 1) * 0.5) * w,
+      y: rect.top + ((-projected.y + 1) * 0.5) * h
+    };
+  }
+
+  /**
+   * Resolves a viewport click/tap `(clientX, clientY)` to the intended chess square (`a1`..`h8`)
+   * using 4-Tier Smart Priority Raycasting:
+   * 1. Active selection legal destinations (board plane `y = 0` or target enemy hitbox) take top priority
+   *    so intervening pieces (such as Pawns in front of a jumping Knight) never block legal moves.
+   * 2. Friendly pieces of the side to move (`color === turn`) via watertight per-piece selection hitboxes;
+   *    non-target opponent pieces are ignored so they can never occlude friendly pieces behind them.
+   * 3. Exact `y = 0` board plane square fallback.
+   * 4. Any intersected piece hitbox fallback.
+   */
+  public pickSquareAtClientPosition(clientX: number, clientY: number): Square | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
 
     this.pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
+    this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
-    const targets: THREE.Object3D[] = [this.piecesGroup, this.chessboard.group];
-    const hits = this.raycaster.intersectObjects(targets, true);
+    const snap = this.lastSnapshot;
+    const selectedSquare = snap?.selectedSquare ?? null;
+    const legalSet = new Set<Square>(snap?.legalDestinations.map((d) => d.square) ?? []);
+    const turn = snap?.turn ?? 'w';
 
-    for (const hit of hits) {
+    // 1. Intersect mathematical y = 0 board surface plane
+    const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const planeHit = new THREE.Vector3();
+    let groundSquare: Square | null = null;
+    let groundDistFromCenter = Infinity;
+
+    if (this.raycaster.ray.intersectPlane(boardPlane, planeHit)) {
+      groundSquare = worldPositionToSquare(planeHit.x, planeHit.z);
+      if (groundSquare) {
+        const sqCenter = squareToWorldPosition(groundSquare, 0);
+        groundDistFromCenter = Math.hypot(planeHit.x - sqCenter.x, planeHit.z - sqCenter.z);
+      }
+    }
+
+    if (!groundSquare) {
+      const boardHits = this.raycaster.intersectObjects([this.chessboard.group], true);
+      for (const hit of boardHits) {
+        let obj: THREE.Object3D | null = hit.object;
+        while (obj) {
+          if (obj.userData?.square) {
+            groundSquare = obj.userData.square as Square;
+            break;
+          }
+          obj = obj.parent;
+        }
+        if (groundSquare) break;
+      }
+    }
+
+    // 2. Intersect watertight piece hitboxes
+    const rawPieceHits = this.raycaster.intersectObjects([this.piecesGroup], true);
+    const pieceHits: Array<{
+      square: Square;
+      color: Color;
+      type: PieceSymbol;
+      point: THREE.Vector3;
+      distance: number;
+    }> = [];
+    const seenSquares = new Set<Square>();
+
+    for (const hit of rawPieceHits) {
       let obj: THREE.Object3D | null = hit.object;
       while (obj) {
-        if (obj.userData?.square) {
-          this.onSquareSelected(obj.userData.square as Square);
-          return;
+        if (obj.userData?.square && obj.userData?.color) {
+          const sq = obj.userData.square as Square;
+          if (!seenSquares.has(sq)) {
+            seenSquares.add(sq);
+            pieceHits.push({
+              square: sq,
+              color: obj.userData.color as Color,
+              type: obj.userData.type as PieceSymbol,
+              point: hit.point,
+              distance: hit.distance
+            });
+          }
+          break;
         }
         obj = obj.parent;
       }
+    }
+
+    // Priority 1: Legal destination square of the currently selected piece
+    if (selectedSquare && legalSet.size > 0) {
+      if (groundSquare && legalSet.has(groundSquare)) {
+        return groundSquare;
+      }
+      for (const ph of pieceHits) {
+        if (legalSet.has(ph.square)) {
+          return ph.square;
+        }
+      }
+    }
+
+    // Priority 2: Friendly piece of the active turn (`ph.color === turn`)
+    const friendlyHits = pieceHits.filter((ph) => ph.color === turn);
+    if (friendlyHits.length > 0) {
+      if (
+        groundSquare &&
+        groundSquare !== friendlyHits[0].square &&
+        groundDistFromCenter <= 0.38
+      ) {
+        const groundPieceObj = this.pieceObjects.get(groundSquare);
+        if (groundPieceObj && groundPieceObj.userData?.color === turn) {
+          const alsoHitGroundPiece = friendlyHits.some((fh) => fh.square === groundSquare);
+          if (alsoHitGroundPiece || friendlyHits[0].point.y > 0.48) {
+            return groundSquare;
+          }
+        }
+      }
+      return friendlyHits[0].square;
+    }
+
+    // Priority 3: Board plane square
+    if (groundSquare) {
+      return groundSquare;
+    }
+
+    // Priority 4: Any piece hitbox
+    if (pieceHits.length > 0) {
+      return pieceHits[0].square;
+    }
+
+    return null;
+  }
+
+  private handleCanvasTap(clientX: number, clientY: number): void {
+    const picked = this.pickSquareAtClientPosition(clientX, clientY);
+    if (picked) {
+      this.onSquareSelected(picked);
     }
   }
 
@@ -944,7 +1134,7 @@ export class SceneManager {
 
     const tick = () => {
       this.animationFrameId = requestAnimationFrame(tick);
-      const delta = Math.min(0.1, this.clock.getDelta());
+      const delta = Math.min(0.25, this.clock.getDelta());
       const elapsed = this.clock.elapsedTime;
 
       // 1. Update Main Menu slow background showcase camera

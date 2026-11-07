@@ -1343,3 +1343,39 @@ body,
     display: none;
   }
 }
+
+/* Non-blocking Turn & Interaction Feedback Toast */
+.hud-feedback-toast {
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  pointer-events: none;
+  background: rgba(16, 13, 11, 0.94);
+  border: 1px solid var(--border-gold);
+  color: var(--gold-bright);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.hud-feedback-toast.warn {
+  border-color: rgba(255, 77, 94, 0.65);
+  color: #ff9aa4;
+}
+
+@media (max-width: 768px) {
+  .hud-feedback-toast {
+    top: 72px;
+    font-size: 0.7rem;
+    padding: 5px 12px;
+  }
+}
