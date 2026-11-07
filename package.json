@@ -1,15 +1,15 @@
 {
   "name": "mochess-arcane-kingdom",
-  "version": "0.1.0-preview",
+  "version": "1.0.0",
   "private": true,
-  "description": "MoChess — Arcane Kingdom is a cinematic 3D fantasy chess game featuring animated characters, magical battles, multiple fantasy arenas, and immersive gameplay. Built with Three.js, TypeScript, and Blender.",
+  "description": "MoChess: Wizard Chess - Arcane Kingdom is a cinematic 3D fantasy chess game featuring magical battles, animated chess pieces, multiple arenas, customizable skins, AI opponents, and online PvP. Play on desktop and mobile.",
   "author": "Dimas Mong (https://github.com/dimasmong)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dimasmong/MoChess.git"
   },
-  "homepage": "https://github.com/dimasmong/MoChess",
+  "homepage": "https://mochess-arcane.vercel.app",
   "type": "module",
   "scripts": {
     "dev": "vite",
