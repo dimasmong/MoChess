@@ -19,11 +19,37 @@ import { AnimationController } from './AnimationController';
 
 export type CameraPreset = 'gameplay' | 'top' | 'cinematic' | 'white' | 'black';
 
+const PIECE_MARKERS_STORAGE_KEY = 'mochess_piece_markers_v1';
+
+function loadSavedPieceMarkers(fallback = true): boolean {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(PIECE_MARKERS_STORAGE_KEY);
+      if (raw === 'true') return true;
+      if (raw === 'false') return false;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return fallback;
+}
+
+function savePieceMarkersPref(enabled: boolean): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(PIECE_MARKERS_STORAGE_KEY, enabled ? 'true' : 'false');
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export interface SceneSettings {
   quality: QualityTier;
   reducedMotion: boolean;
   magicalFx: boolean;
   showCoordinates: boolean;
+  pieceMarkers: boolean;
   cameraSensitivity: number;
 }
 
@@ -130,6 +156,7 @@ export class SceneManager {
       reducedMotion: initialSettings?.reducedMotion ?? false,
       magicalFx: initialSettings?.magicalFx ?? true,
       showCoordinates: initialSettings?.showCoordinates ?? false,
+      pieceMarkers: initialSettings?.pieceMarkers ?? loadSavedPieceMarkers(true),
       cameraSensitivity: initialSettings?.cameraSensitivity ?? 1.0
     };
 
@@ -153,6 +180,7 @@ export class SceneManager {
     this.initControls();
 
     this.assetManager = new PieceAssetManager(this.settings.quality, this.isMobile);
+    this.assetManager.setPieceMarkersVisible(this.settings.pieceMarkers);
     this.assetManager.applyMapTheme(this.currentMapId);
 
     this.chessboard = new ChessboardBuilder(this.settings.quality, this.isMobile, this.currentMapId);
@@ -600,6 +628,8 @@ export class SceneManager {
       stageGroup.add(stageRim);
 
       this.assetManager.setSkin(skinId);
+      const prevMarkers = this.assetManager.arePieceMarkersVisible();
+      this.assetManager.setPieceMarkersVisible(true);
 
       const order: PieceSymbol[] = ['p', 'r', 'n', 'b', 'q', 'k'];
       const files = ['a', 'b', 'c', 'd', 'e', 'f'];
@@ -636,12 +666,13 @@ export class SceneManager {
       this.renderer.setSize(width, height, false);
       this.camera.aspect = width / height;
       this.camera.fov = 34;
-      this.camera.position.set(0.0, 1.62, 5.05);
-      this.camera.lookAt(0.0, 0.94, 0.0);
+      this.camera.position.set(0.0, 2.32, 4.88);
+      this.camera.lookAt(0.0, 0.84, 0.0);
       this.camera.updateProjectionMatrix();
 
       this.renderer.render(this.scene, this.camera);
       const dataUrl = this.renderer.domElement.toDataURL('image/png');
+      this.assetManager.setPieceMarkersVisible(prevMarkers);
       this.skinPreviewCache.set(skinId, dataUrl);
       return dataUrl;
     } finally {
@@ -1258,6 +1289,7 @@ export class SceneManager {
       this.piecesGroup.remove(obj);
     }
     this.pieceObjects.clear();
+    this.assetManager.clearTrackedMarkers();
     this.lastSyncedFen = snapshot.fen;
     this.lastSyncedSkin = this.assetManager.getSkin();
 
@@ -1294,6 +1326,15 @@ export class SceneManager {
   public updateSettings(partial: Partial<SceneSettings>): void {
     const prevQuality = this.settings.quality;
     this.settings = { ...this.settings, ...partial };
+    if (partial.pieceMarkers !== undefined) {
+      savePieceMarkersPref(this.settings.pieceMarkers);
+      this.assetManager.setPieceMarkersVisible(this.settings.pieceMarkers);
+      this.piecesGroup.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && child.userData?.isRoleMarker) {
+          child.visible = this.settings.pieceMarkers;
+        }
+      });
+    }
     this.chessboard.setCoordinatesVisible(
       this.settings.showCoordinates || this.currentMapId === 'classic'
     );

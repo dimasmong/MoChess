@@ -115,6 +115,7 @@ export interface TranslationStrings {
   settingCamSensitivity: string;
   settingMagicalFx: string;
   settingReducedMotion: string;
+  settingPieceMarkers: string;
   settingShowCoords: string;
   btnDone: string;
   badgeSelected: string;
@@ -342,6 +343,7 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     settingCamSensitivity: 'Camera & Zoom Sensitivity',
     settingMagicalFx: 'Combat FX & Fire Particles',
     settingReducedMotion: 'Reduced Motion (Instant Camera & Moves)',
+    settingPieceMarkers: 'Piece Identification Markers (Top Symbols & Colors)',
     settingShowCoords: 'Show Board Coordinates (A–H, 1–8)',
     btnDone: 'Done',
     badgeSelected: '✓ Selected',
@@ -553,6 +555,7 @@ export const TRANSLATIONS: Record<Language, TranslationStrings> = {
     settingCamSensitivity: 'Sensitivitas Kamera & Zoom',
     settingMagicalFx: 'Efek Tempur & Partikel Api',
     settingReducedMotion: 'Kurangi Gerakan (Kamera & Langkah Instan)',
+    settingPieceMarkers: 'Penanda Identifikasi Bidak (Simbol Atas & Warna)',
     settingShowCoords: 'Tampilkan Koordinat Papan (A–H, 1–8)',
     btnDone: 'Selesai',
     badgeSelected: '✓ Dipilih',

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getPieceGeometryParts } from '../src/assets/PieceGeometryBuilder';
-import { PieceAssetManager } from '../src/assets/PieceAssetManager';
+import { PieceAssetManager, ROLE_ACCENT_HEX } from '../src/assets/PieceAssetManager';
 import { ChessboardBuilder } from '../src/scene/ChessboardBuilder';
 import { buildMenuHeroScene } from '../src/scene/MenuHeroSceneBuilder';
 import { soundManager, MAIN_MENU_MUSIC_TRACK, MAP_MUSIC_TRACKS } from '../src/audio/SoundManager';
@@ -54,13 +54,68 @@ describe('3D Fantasy Piece Asset Pipeline (Sculpted Geometry & GLB Export/Parse)
     for (const name of expectedNames) {
       const node = gltf.scene.getObjectByName(name);
       expect(node).toBeDefined();
-      expect(node.children.length).toBe(4);
+      expect(node.children.length).toBe(5);
       const childNames = node.children.map((c: any) => c.name.toLowerCase());
       expect(childNames.some((n: string) => n.startsWith('body'))).toBe(true);
       expect(childNames.some((n: string) => n.startsWith('gold'))).toBe(true);
       expect(childNames.some((n: string) => n.startsWith('steel'))).toBe(true);
       expect(childNames.some((n: string) => n.startsWith('face'))).toBe(true);
+      expect(childNames.some((n: string) => n.startsWith('marker'))).toBe(true);
     }
+  });
+
+  it('builds universal 3D overhead role emblems & 6 distinct role accent materials across all 4 skins, with ON/OFF marker toggle & Low Graphics support', () => {
+    const skins: PieceSkinId[] = ['arcane_royalty', 'runic_warforged', 'mystic_sanctum', 'classic'];
+
+    // Verify 6 unique role accent colors
+    expect(new Set(Object.values(ROLE_ACCENT_HEX)).size).toBe(6);
+
+    // Verify every role in every skin produces sculpted 3D marker geometry and proper height hierarchy
+    for (const skin of skins) {
+      const pawnParts = getPieceGeometryParts('p', 'high', skin);
+      const rookParts = getPieceGeometryParts('r', 'high', skin);
+      const queenParts = getPieceGeometryParts('q', 'high', skin);
+      const kingParts = getPieceGeometryParts('k', 'high', skin);
+
+      for (const sym of symbols) {
+        const p = getPieceGeometryParts(sym, 'high', skin);
+        expect(p.marker.getAttribute('position').count).toBeGreaterThan(20);
+      }
+
+      pawnParts.body.computeBoundingBox();
+      rookParts.body.computeBoundingBox();
+      queenParts.body.computeBoundingBox();
+      kingParts.body.computeBoundingBox();
+      kingParts.marker.computeBoundingBox();
+
+      expect(pawnParts.body.boundingBox!.max.y).toBeLessThan(rookParts.body.boundingBox!.max.y);
+      const kingTopY = Math.max(kingParts.body.boundingBox!.max.y, kingParts.marker.boundingBox!.max.y);
+      expect(queenParts.body.boundingBox!.max.y).toBeLessThan(kingTopY);
+    }
+
+    // Verify Piece Identification Markers ON / OFF toggle preserves physical body & hitbox
+    const manager = new PieceAssetManager('low', true);
+    expect(manager.arePieceMarkersVisible()).toBe(true);
+
+    const lowKnight = manager.createPieceInstance('n', 'w', 'g1');
+    const markerMeshes: any[] = [];
+    let bodyMesh: any = null;
+    lowKnight.traverse((c: any) => {
+      if (c.isMesh && c.userData?.isRoleMarker) markerMeshes.push(c);
+      if (c.isMesh && c.name === 'body') bodyMesh = c;
+    });
+    expect(markerMeshes.length).toBeGreaterThan(0);
+    expect(markerMeshes.every((m) => m.visible === true)).toBe(true);
+    expect(manager.getRoleMarkerMaterial('n').envMapIntensity).toBe(0);
+
+    manager.setPieceMarkersVisible(false);
+    expect(manager.arePieceMarkersVisible()).toBe(false);
+    expect(markerMeshes.every((m) => m.visible === false)).toBe(true);
+    expect(bodyMesh.visible).toBe(true);
+    expect(lowKnight.userData.hitboxMesh.visible).toBe(true);
+
+    manager.setPieceMarkersVisible(true);
+    expect(markerMeshes.every((m) => m.visible === true)).toBe(true);
   });
 
   it('instantiates 3D piece groups with White-and-Gold vs Black-and-Gold PBR materials, AnimationMixer, LODs, and raycast metadata', () => {

@@ -9,6 +9,7 @@ export interface PieceMeshParts {
   gold: THREE.BufferGeometry;
   steel: THREE.BufferGeometry;
   face: THREE.BufferGeometry;
+  marker: THREE.BufferGeometry;
 }
 
 function finalizeMerged(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
@@ -80,6 +81,417 @@ function prepGeo(
   }
 
   return g;
+}
+
+// ============================================================================
+// UNIVERSAL 3D OVERHEAD ROLE EMBLEM & TOP GEOMETRY HELPERS
+// Real extruded 3D geometry integrated into upper surfaces (zero flat stickers,
+// zero z-fighting, readable from Strategic Top-Down & Direct Overhead cameras).
+// ============================================================================
+
+function extrudeHorizontalEmblem(
+  ptsXZ: Array<[number, number]>,
+  depth: number,
+  yBase: number,
+  detail: PieceDetailLevel,
+  opts?: {
+    scale?: number;
+    rotX?: number;
+    rotY?: number;
+    offsetX?: number;
+    offsetZ?: number;
+    bevel?: boolean;
+  }
+): THREE.BufferGeometry {
+  const s = opts?.scale ?? 1.0;
+  const shape = new THREE.Shape();
+  ptsXZ.forEach(([x, z], idx) => {
+    // Map (x, z) -> (x, -z) so after rotating -90 deg around X, +x -> +X, +z -> +Z, extrude -> +Y
+    const sx = x * s;
+    const sy = -z * s;
+    if (idx === 0) shape.moveTo(sx, sy);
+    else shape.lineTo(sx, sy);
+  });
+  shape.closePath();
+
+  const useBevel = (opts?.bevel ?? true) && detail === 'high';
+  const extrudeGeo = new THREE.ExtrudeGeometry(shape, {
+    steps: 1,
+    depth,
+    curveSegments: detail === 'high' ? 8 : 4,
+    bevelEnabled: useBevel,
+    bevelThickness: useBevel ? Math.min(0.006, depth * 0.25) : 0,
+    bevelSize: useBevel ? 0.005 * s : 0,
+    bevelSegments: 1
+  });
+
+  return prepGeo(extrudeGeo, {
+    rotation: [-Math.PI / 2 + (opts?.rotX ?? 0), opts?.rotY ?? 0, 0],
+    position: [opts?.offsetX ?? 0, yBase, opts?.offsetZ ?? 0],
+    flatShaded: true
+  });
+}
+
+/**
+ * PAWN TOP EMBLEM — Pearl Silver Single Dot Medallion framed by a contrasting gold bezel ring.
+ */
+function addPawnTopDotEmblem(
+  yTop: number,
+  scale: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  isClassic = false
+): void {
+  const segs = detail === 'high' ? 24 : 12;
+  const bezelR = (isClassic ? 0.068 : 0.092) * scale;
+  const dotR = (isClassic ? 0.054 : 0.072) * scale;
+  const h = isClassic ? 0.016 : 0.026;
+
+  // Contrasting warm gold bezel ring so Pearl Silver reads crisply on BOTH White ivory and Black obsidian
+  goldList.push(
+    prepGeo(new THREE.CylinderGeometry(bezelR, bezelR * 1.06, h * 0.65, segs), {
+      position: [0, yTop + h * 0.25, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(bezelR * 0.96, 0.011 * scale, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, yTop + h * 0.55, 0]
+    })
+  );
+
+  // Raised Pearl Silver Single Dot Medallion
+  markerList.push(
+    prepGeo(new THREE.CylinderGeometry(dotR * 0.96, dotR, h, segs), {
+      position: [0, yTop + h * 0.65, 0]
+    })
+  );
+  markerList.push(
+    prepGeo(new THREE.SphereGeometry(dotR * 0.96, segs, 8, 0, Math.PI * 2, 0, Math.PI * 0.42), {
+      scale: [1.0, 0.36, 1.0],
+      position: [0, yTop + h * 1.02, 0]
+    })
+  );
+}
+
+/**
+ * ROOK TOP EMBLEM — Emerald Green Crenellated Castle Tower / Fortress Symbol on a square parapet deck.
+ */
+function addRookTopFortressEmblem(
+  yDeck: number,
+  scale: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  isClassic = false
+): void {
+  const depth = isClassic ? 0.018 : 0.032;
+
+  // Crisp square gold frame inset on the parapet deck
+  goldList.push(
+    prepGeo(new THREE.BoxGeometry(0.255 * scale, 0.012, 0.255 * scale), {
+      position: [0, yDeck + 0.005, 0],
+      flatShaded: true
+    })
+  );
+
+  // 3-Merlon Crenellated Castle Tower silhouette in (X, Z) facing forward (+Z) & upward (+Y)
+  const towerPts: Array<[number, number]> = [
+    [-0.108, -0.112],
+    [0.108, -0.112],
+    [0.092, -0.068],
+    [0.084, 0.024],
+    [0.114, 0.042],
+    [0.114, 0.114],
+    [0.056, 0.114],
+    [0.056, 0.068],
+    [0.028, 0.068],
+    [0.028, 0.114],
+    [-0.028, 0.114],
+    [-0.028, 0.068],
+    [-0.056, 0.068],
+    [-0.056, 0.114],
+    [-0.114, 0.114],
+    [-0.114, 0.042],
+    [-0.084, 0.024],
+    [-0.092, -0.068]
+  ];
+
+  markerList.push(
+    extrudeHorizontalEmblem(towerPts, depth, yDeck + 0.012, detail, {
+      scale,
+      bevel: !isClassic
+    })
+  );
+
+  // Raised central fortress keep ridge for extra 3D depth
+  if (!isClassic) {
+    markerList.push(
+      prepGeo(new THREE.BoxGeometry(0.088 * scale, depth * 0.45, 0.095 * scale), {
+        position: [0, yDeck + 0.012 + depth + depth * 0.2, -0.018 * scale],
+        flatShaded: true
+      })
+    );
+  }
+}
+
+/**
+ * KNIGHT TOP EMBLEM — Ember Red Stylized Horse-Head Crest integrated onto the upper horse crown/poll.
+ */
+function addKnightTopHorseEmblem(
+  yPoll: number,
+  zPoll: number,
+  scale: number,
+  pitchX: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  isClassic = false
+): void {
+  const segs = detail === 'high' ? 16 : 8;
+  const depth = isClassic ? 0.018 : 0.030;
+
+  // Sculpted dorsal crest escutcheon plate framing the Ember Red Horse-Head symbol
+  goldList.push(
+    prepGeo(new THREE.CylinderGeometry(0.132 * scale, 0.142 * scale, 0.016, segs), {
+      scale: [0.94, 1.0, 1.08],
+      rotation: [pitchX, 0, 0],
+      position: [0, yPoll, zPoll]
+    })
+  );
+
+  // Iconic Stylized Chess Horse-Head Profile in (X, Z) — clear arched mane, alert ear, forehead, snout & jaw
+  const horsePts: Array<[number, number]> = [
+    [-0.084, -0.104],
+    [0.048, -0.104],
+    [0.028, -0.032],
+    [0.046, 0.002],
+    [0.112, -0.014],
+    [0.122, 0.028],
+    [0.058, 0.082],
+    [0.034, 0.106],
+    [0.038, 0.138],
+    [0.004, 0.112],
+    [-0.030, 0.134],
+    [-0.086, 0.084],
+    [-0.106, 0.004]
+  ];
+
+  markerList.push(
+    extrudeHorizontalEmblem(horsePts, depth, yPoll + 0.009, detail, {
+      scale: scale * 0.95,
+      rotX: pitchX,
+      offsetZ: zPoll,
+      bevel: !isClassic
+    })
+  );
+}
+
+/**
+ * BISHOP TOP EMBLEM — Arcane Cyan Sacred 4-Point Diamond nestled inside a cleft mitre/crystal.
+ */
+function addBishopTopDiamondEmblem(
+  yCleft: number,
+  scale: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  isClassic = false
+): void {
+  const depth = isClassic ? 0.018 : 0.034;
+
+  // Pointed diamond gold setting rim
+  const rimPts: Array<[number, number]> = [
+    [0, 0.156],
+    [0.108, 0],
+    [0, -0.156],
+    [-0.108, 0]
+  ];
+  goldList.push(
+    extrudeHorizontalEmblem(rimPts, 0.014, yCleft, detail, {
+      scale,
+      bevel: false
+    })
+  );
+
+  // Bold Sacred Cyan Diamond
+  const diamondPts: Array<[number, number]> = [
+    [0, 0.138],
+    [0.092, 0],
+    [0, -0.138],
+    [-0.092, 0]
+  ];
+  markerList.push(
+    extrudeHorizontalEmblem(diamondPts, depth, yCleft + 0.012, detail, {
+      scale,
+      bevel: !isClassic
+    })
+  );
+
+  // Upper faceted gemstone ridge for crisp top catchlights
+  if (!isClassic) {
+    markerList.push(
+      prepGeo(new THREE.OctahedronGeometry(0.068 * scale, 0), {
+        scale: [0.85, 0.42, 1.32],
+        position: [0, yCleft + 0.012 + depth, 0],
+        flatShaded: true
+      })
+    );
+  }
+}
+
+/**
+ * QUEEN TOP EMBLEM — Amethyst Purple Eight-Pointed Star inside the Queen's radial coronet.
+ */
+function addQueenTopEightPointStarEmblem(
+  yDish: number,
+  scale: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  isClassic = false
+): void {
+  const segs = detail === 'high' ? 16 : 8;
+  const depth = isClassic ? 0.018 : 0.034;
+
+  // Gold jewel bezel ring beneath the 8-point star
+  goldList.push(
+    prepGeo(new THREE.CylinderGeometry(0.132 * scale, 0.142 * scale, 0.014, segs), {
+      position: [0, yDish + 0.006, 0]
+    })
+  );
+
+  // Exact 16-vertex Eight-Pointed Star polygon
+  const starPts: Array<[number, number]> = [];
+  const outerR = 0.148;
+  const innerR = 0.060;
+  for (let i = 0; i < 16; i++) {
+    const a = (i * Math.PI) / 8;
+    const r = i % 2 === 0 ? outerR : innerR;
+    starPts.push([Math.sin(a) * r, Math.cos(a) * r]);
+  }
+
+  markerList.push(
+    extrudeHorizontalEmblem(starPts, depth, yDish + 0.013, detail, {
+      scale,
+      bevel: !isClassic
+    })
+  );
+
+  // Faceted central amethyst star boss
+  if (!isClassic) {
+    markerList.push(
+      prepGeo(new THREE.OctahedronGeometry(0.056 * scale, 0), {
+        scale: [1.0, 0.55, 1.0],
+        position: [0, yDish + 0.013 + depth, 0],
+        flatShaded: true
+      })
+    );
+  }
+}
+
+/**
+ * KING TOP EMBLEM — Royal Gold Heraldic Cross Pattée + Sovereign Crown Crest.
+ */
+function addKingTopCrownCrossEmblem(
+  yCrown: number,
+  scale: number,
+  detail: PieceDetailLevel,
+  goldList: THREE.BufferGeometry[],
+  steelList: THREE.BufferGeometry[],
+  markerList: THREE.BufferGeometry[],
+  includeVerticalFinial = true,
+  isClassic = false
+): void {
+  const depth = isClassic ? 0.018 : 0.036;
+
+  // Contrasting metallic sovereign escutcheon collar so Royal Gold stands out sharply on White & Black alike
+  const collarList = isClassic ? goldList : steelList;
+  collarList.push(
+    prepGeo(new THREE.CylinderGeometry(0.146 * scale, 0.154 * scale, 0.016, 8), {
+      rotation: [0, Math.PI / 8, 0],
+      position: [0, yCrown + 0.006, 0],
+      flatShaded: true
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.152 * scale, 0.012 * scale, 6, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, yCrown + 0.012, 0],
+      flatShaded: true
+    })
+  );
+
+  // Flared 4-Arm Heraldic Royal Cross Pattée in horizontal (X, Z) plane — unmistakable from 90° overhead!
+  const wIn = 0.028;
+  const wOut = 0.068;
+  const arm = 0.142;
+  const crossPts: Array<[number, number]> = [
+    [-wOut, arm],
+    [wOut, arm],
+    [wIn, wIn],
+    [arm, wOut],
+    [arm, -wOut],
+    [wIn, -wIn],
+    [wOut, -arm],
+    [-wOut, -arm],
+    [-wIn, -wIn],
+    [-arm, -wOut],
+    [-arm, wOut],
+    [-wIn, wIn]
+  ];
+
+  markerList.push(
+    extrudeHorizontalEmblem(crossPts, depth, yCrown + 0.014, detail, {
+      scale,
+      bevel: !isClassic
+    })
+  );
+
+  if (includeVerticalFinial) {
+    // Structural physical sovereign vertical cross core in goldList so if Markers are toggled OFF,
+    // the King retains its iconic vertical sovereign cross finial!
+    const baseFinialY = yCrown + 0.012;
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.036 * scale, 0.21 * scale, 0.036 * scale), {
+        position: [0, baseFinialY + 0.105 * scale, 0],
+        flatShaded: true
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.142 * scale, 0.038 * scale, 0.036 * scale), {
+        position: [0, baseFinialY + 0.142 * scale, 0],
+        flatShaded: true
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.036 * scale, 0.038 * scale, 0.142 * scale), {
+        position: [0, baseFinialY + 0.142 * scale, 0],
+        flatShaded: true
+      })
+    );
+
+    // Royal Gold role-marker sheath/capping over the vertical Sovereign Cross finial
+    markerList.push(
+      prepGeo(new THREE.BoxGeometry(0.044 * scale, 0.19 * scale, 0.044 * scale), {
+        position: [0, yCrown + 0.014 + depth + 0.088 * scale, 0],
+        flatShaded: true
+      })
+    );
+    markerList.push(
+      prepGeo(new THREE.BoxGeometry(0.156 * scale, 0.046 * scale, 0.044 * scale), {
+        position: [0, yCrown + 0.014 + depth + 0.118 * scale, 0],
+        flatShaded: true
+      })
+    );
+    markerList.push(
+      prepGeo(new THREE.BoxGeometry(0.044 * scale, 0.046 * scale, 0.156 * scale), {
+        position: [0, yCrown + 0.014 + depth + 0.118 * scale, 0],
+        flatShaded: true
+      })
+    );
+  }
 }
 
 function createSculptedLathe(
@@ -384,8 +796,7 @@ function addSkirtGoldStrips(
 }
 
 /**
- * 1. PAWN — Kettle-Helm Vanguard Foot-Soldier with Cross Shield & Upright Broadsword
- * Matches Images 1, 3, 4, 5.
+ * 1. PAWN (ARCANE ROYALTY) — Compact Vanguard Foot-Soldier with Minimal Rounded Cap & Pearl Silver Medallion
  */
 function buildPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const segs = detail === 'high' ? 28 : 14;
@@ -393,211 +804,163 @@ function buildPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addOctagonalPedestal(0.35, segs, bodyList, goldList);
+  addOctagonalPedestal(0.32, segs, bodyList, goldList);
 
-  // Armored Skirt (Tassets) + Cuirass Torso + Neck
+  // Compact Armored Skirt (Tassets) + Cuirass Torso + Rounded Kettle Cap
   bodyList.push(
     createSculptedLathe(
       [
-        [0.27, 0.16],
-        [0.24, 0.30],
-        [0.19, 0.45], // Waist
-        [0.20, 0.62], // Chest cuirass
-        [0.14, 0.70], // Neck gorget
-        [0.14, 0.80], // Head core
-        [0.001, 0.84]
+        [0.24, 0.16],
+        [0.21, 0.30],
+        [0.165, 0.44],
+        [0.175, 0.58],
+        [0.135, 0.66],
+        [0.162, 0.75],
+        [0.145, 0.83],
+        [0.092, 0.865],
+        [0.001, 0.87]
       ],
       segs
     )
   );
 
-  // 8 Vertical Gold Trim Strips on Armored Skirt + Gold Waist Belt & Neck Collar
-  addSkirtGoldStrips(8, 0.265, 0.192, 0.17, 0.45, goldList);
+  addSkirtGoldStrips(8, 0.236, 0.168, 0.17, 0.44, goldList);
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.195, 0.02, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.17, 0.016, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
-      position: [0, 0.45, 0]
+      position: [0, 0.44, 0]
     })
   );
+  // Compact Rounded Cap Rim (kept noticeably smaller than major pieces)
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.155, 0.016, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.168, 0.014, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
-      position: [0, 0.71, 0]
+      position: [0, 0.74, 0]
     })
   );
 
-  // Shoulder Pauldrons & Arms
-  addPauldronsAndArms(0.195, 0.62, 0.15, bodyList, goldList);
+  // Low Tucked Vanguard Arms, Heater Shield & Short Broadsword (kept well below cap for clean top silhouette)
+  addPauldronsAndArms(0.165, 0.55, 0.12, bodyList, goldList);
+  addCrossHeaterShield([-0.14, 0.42, 0.16], [0.06, -0.22, 0], 0.72, bodyList, goldList);
+  addMedievalSword([0.16, 0.36, 0.13], [0.06, 0, 0], 0.34, false, goldList, steelList);
 
-  // Iconic Wide-Brimmed Kettle Hat Helmet (Chapel-de-Fer) matching reference screenshots
-  // Sloped wide brim
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.155, 0.255, 0.055, segs), {
-      position: [0, 0.79, 0]
-    })
-  );
-  // Gleaming Gold Outer Brim Ring
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.255, 0.018, 10, segs), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 0.768, 0]
-    })
-  );
-  // Rounded Kettle Helmet Dome
-  bodyList.push(
-    prepGeo(new THREE.SphereGeometry(0.158, segs, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), {
-      position: [0, 0.79, 0]
-    })
-  );
-  // Gold Cross Crest Finial on top of Kettle Helmet Dome (visible in Images 1, 4, 5)
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.026, 0.065, 0.16), {
-      position: [0, 0.945, 0]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.16, 0.065, 0.026), {
-      position: [0, 0.945, 0]
-    })
-  );
-
-  // Left Hand: Kite/Heater Shield with Gold Cross held in front-left
-  addCrossHeaterShield([-0.11, 0.49, 0.21], [0.06, -0.22, 0], 0.92, bodyList, goldList);
-
-  // Right Hand: Upright Steel Broadsword with Gold Hilt held on right side
-  addMedievalSword([0.21, 0.48, 0.16], [0.05, 0, 0], 0.54, false, goldList, steelList);
+  // Top Identifier: Pearl Silver Single Dot Medallion in contrasting gold bezel
+  addPawnTopDotEmblem(0.866, 1.0, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
 /**
- * 2. ROOK — Castellated Fortress Keep with Twin Side Turrets & Gold-Capped Battlements
- * Matches Images 1, 3, 4, 5.
+ * 2. ROOK (ARCANE ROYALTY) — Square Castellated Citadel Keep with Angular Battlements & Emerald Fortress Rune
  */
 function buildRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
-  const segs = detail === 'high' ? 28 : 16;
+  const segs = detail === 'high' ? 28 : 14;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addOctagonalPedestal(0.39, segs, bodyList, goldList);
+  addOctagonalPedestal(0.38, segs, bodyList, goldList);
 
-  // Stout Fortress Keep Column with Masonry Grooves & Corbeled Battlement Rim
+  // Tapered Square Stone Citadel Tower Shaft (unmistakably square/angular rather than circular!)
   bodyList.push(
-    createSculptedLathe(
-      [
-        [0.31, 0.16],
-        [0.29, 0.30],
-        [0.27, 0.52],
-        [0.26, 0.78],
-        [0.28, 0.92],
-        [0.32, 1.00], // Corbel flare
-        [0.32, 1.12], // Battlement parapet wall
-        [0.22, 1.12], // Inner turret roof
-        [0.001, 1.10]
-      ],
-      segs
-    )
+    prepGeo(new THREE.CylinderGeometry(0.27, 0.33, 0.78, 4), {
+      rotation: [0, Math.PI / 4, 0],
+      position: [0, 0.55, 0],
+      flatShaded: detail === 'low'
+    })
   );
+  // Subtle sculpted round-corner buttress columns at the 4 corners
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      bodyList.push(
+        prepGeo(new THREE.CylinderGeometry(0.068, 0.082, 0.80, detail === 'high' ? 12 : 6), {
+          position: [sx * 0.175, 0.56, sz * 0.175]
+        })
+      );
+    }
+  }
 
-  // Gold horizontal tower bands
-  for (const y of [0.32, 0.64, 0.96, 1.12]) {
-    const r = y > 0.95 ? 0.322 : 0.275;
+  // Horizontal Gold Fortress Bands
+  for (const [by, bw] of [
+    [0.34, 0.45],
+    [0.66, 0.42],
+    [0.95, 0.48]
+  ]) {
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(r, 0.017, 8, segs), {
-        rotation: [Math.PI / 2, 0, 0],
-        position: [0, y, 0]
+      prepGeo(new THREE.BoxGeometry(bw, 0.032, bw), {
+        position: [0, by, 0]
       })
     );
   }
 
-  // Twin Projecting Side Bastions / Turrets (Left -X and Right +X, matching Image 1 & 3)
-  for (const side of [-1, 1]) {
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.16, 0.62, 0.22), {
-        position: [side * 0.26, 0.56, 0]
-      })
-    );
-    // Gold-trimmed side turret roof cap
-    goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.18, 0.04, 0.24), {
-        position: [side * 0.26, 0.88, 0]
-      })
-    );
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.09, 0.14, 4), {
-        rotation: [0, Math.PI / 4, 0],
-        position: [side * 0.26, 0.97, 0]
-      })
-    );
-  }
-
-  // Front & Back Gothic Arched Keep Gateways + Arrow Slits with Gold Frames
+  // Front & Back Gothic Keep Gateways
   for (const dir of [-1, 1]) {
     goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.14, 0.34, 0.04), {
-        position: [0, 0.38, dir * 0.275]
+      prepGeo(new THREE.BoxGeometry(0.14, 0.32, 0.035), {
+        position: [0, 0.36, dir * 0.235]
       })
     );
     steelList.push(
-      prepGeo(new THREE.BoxGeometry(0.10, 0.30, 0.045), {
-        position: [0, 0.37, dir * 0.278]
+      prepGeo(new THREE.BoxGeometry(0.10, 0.28, 0.04), {
+        position: [0, 0.35, dir * 0.238]
       })
     );
   }
 
-  // 8 Crenellated Merlons around the top rim, each with a Gold Cap and Finial Spike
-  const merlonCount = 8;
-  for (let i = 0; i < merlonCount; i++) {
-    const angle = (i * Math.PI * 2) / merlonCount;
-    const r = 0.275;
-    const mx = Math.cos(angle) * r;
-    const mz = Math.sin(angle) * r;
-
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.10, 0.14, 0.08), {
-        rotation: [0, -angle + Math.PI / 2, 0],
-        position: [mx, 1.19, mz]
-      })
-    );
-    goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.11, 0.028, 0.09), {
-        rotation: [0, -angle + Math.PI / 2, 0],
-        position: [mx, 1.265, mz]
-      })
-    );
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.024, 0.06, 6), {
-        position: [mx, 1.305, mz]
-      })
-    );
-  }
-
-  // Central turret gold dome boss (visible in top-down Image 5)
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.12, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), {
-      position: [0, 1.10, 0]
+  // Flared Square Battlement Cornice & Flat Parapet Deck (y = 1.04)
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.49, 0.09, 0.49), {
+      position: [0, 1.00, 0]
     })
   );
+  goldList.push(
+    prepGeo(new THREE.BoxGeometry(0.51, 0.026, 0.51), {
+      position: [0, 1.038, 0]
+    })
+  );
+
+  // 4 Prominent Square Corner Merlon Bastions (with wide open cardinal embrasures!)
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const mx = sx * 0.178;
+      const mz = sz * 0.178;
+      bodyList.push(
+        prepGeo(new THREE.BoxGeometry(0.132, 0.14, 0.132), {
+          position: [mx, 1.11, mz]
+        })
+      );
+      goldList.push(
+        prepGeo(new THREE.BoxGeometry(0.144, 0.026, 0.144), {
+          position: [mx, 1.185, mz]
+        })
+      );
+    }
+  }
+
+  // Top Identifier: Emerald Green Fortress / Tower Rune on the flat square parapet deck
+  addRookTopFortressEmblem(1.046, 0.98, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
 /**
- * 3. KNIGHT — Armored Warhorse + Crusader Knight Rider in Great-Helm with Shield & Jousting Lance
- * Matches Images 1, 3, 4, 5.
+ * 3. KNIGHT (ARCANE ROYALTY) — Armored Royal Destrier Warhorse with Directional Snout/Mane & Ember Red Horse Crest
  */
 function buildKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const segs = detail === 'high' ? 28 : 14;
@@ -606,147 +969,115 @@ function buildKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addOctagonalPedestal(0.38, segs, bodyList, goldList);
 
-  // Lower Armored Barding Skirt
+  // Lower Armored Caparison / Barding Skirt
   bodyList.push(
     createSculptedLathe(
       [
-        [0.30, 0.16],
-        [0.27, 0.36],
-        [0.23, 0.54],
-        [0.001, 0.56]
+        [0.29, 0.16],
+        [0.26, 0.34],
+        [0.21, 0.48],
+        [0.001, 0.50]
       ],
       segs
     )
   );
-  addSkirtGoldStrips(8, 0.295, 0.235, 0.17, 0.52, goldList);
+  addSkirtGoldStrips(8, 0.285, 0.215, 0.17, 0.47, goldList);
 
-  // Sculpted Armored Warhorse Head & Neck projecting forward (+Z)
+  // Commanding Asymmetric Armored Warhorse Neck, Poll, Forehead & Forward-Projecting Snout (+Z)
   const horseSpine = [
-    { y: 0.44, z: 0.06, rx: 0.16, rz: 0.18, pitch: -0.2 },
-    { y: 0.64, z: 0.12, rx: 0.135, rz: 0.16, pitch: -0.1 },
-    { y: 0.84, z: 0.14, rx: 0.115, rz: 0.145, pitch: 0.35 }, // Horse poll
-    { y: 0.88, z: 0.22, rx: 0.105, rz: 0.125, pitch: 1.05 }, // Horse forehead
-    { y: 0.77, z: 0.32, rx: 0.075, rz: 0.09, pitch: 1.35 }, // Nasal bridge
-    { y: 0.68, z: 0.39, rx: 0.055, rz: 0.065, pitch: 1.42 } // Muzzle
+    { y: 0.38, z: -0.02, rx: 0.175, rz: 0.195, pitch: -0.15 },
+    { y: 0.62, z: 0.02, rx: 0.150, rz: 0.180, pitch: -0.18 },
+    { y: 0.88, z: 0.04, rx: 0.132, rz: 0.165, pitch: 0.05 },
+    { y: 1.09, z: 0.07, rx: 0.118, rz: 0.150, pitch: 0.42 }, // Poll / Crown
+    { y: 1.04, z: 0.20, rx: 0.096, rz: 0.118, pitch: 1.08 }, // Forehead
+    { y: 0.91, z: 0.31, rx: 0.072, rz: 0.086, pitch: 1.32 }, // Nasal bridge
+    { y: 0.82, z: 0.37, rx: 0.056, rz: 0.066, pitch: 1.40 } // Tapered muzzle
   ];
   bodyList.push(createLoftedOrganicMesh(horseSpine, ringSegs));
 
-  // Horse Ears & Gold Chamfron Face-Armor
+  // Alert Twin Sculpted Horse Ears framing the crown
   for (const side of [-1, 1]) {
     bodyList.push(
-      prepGeo(new THREE.ConeGeometry(0.032, 0.13, 6), {
-        rotation: [-0.25, 0, side * -0.18],
-        position: [side * 0.065, 0.96, 0.13]
+      prepGeo(new THREE.ConeGeometry(0.036, 0.15, 6), {
+        rotation: [-0.22, 0, side * -0.22],
+        position: [side * 0.095, 1.18, -0.02]
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.018, 8, 8), {
+        position: [side * 0.092, 1.02, 0.16]
       })
     );
   }
+
+  // Regal Golden Chamfron Nose-Armor + Ember-Red Nasal Accent Stripe
   goldList.push(
-    prepGeo(new THREE.ConeGeometry(0.068, 0.26, 4), {
-      scale: [0.95, 1.0, 0.32],
-      rotation: [2.25, Math.PI / 4, 0],
-      position: [0, 0.80, 0.30]
+    prepGeo(new THREE.ConeGeometry(0.078, 0.30, 4), {
+      scale: [0.95, 1.0, 0.34],
+      rotation: [2.22, Math.PI / 4, 0],
+      position: [0, 0.96, 0.28]
+    })
+  );
+  markerList.push(
+    prepGeo(new THREE.BoxGeometry(0.036, 0.024, 0.19), {
+      rotation: [0.66, 0, 0],
+      position: [0, 0.99, 0.265],
+      flatShaded: true
     })
   );
 
-  // Crusader Rider Torso & Flat-Topped Great Helm rising above/behind the horse (z = -0.05)
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.175, 0.195, 0.46, segs), {
-      position: [0, 0.74, -0.05]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.185, 0.018, 8, segs), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 0.56, -0.05]
-    })
-  );
+  // Flowing Sculpted Mane Plates sweeping down the back spine (-Z) for dramatic asymmetric silhouette
+  for (let m = 0; m < 6; m++) {
+    const t = m / 5;
+    const my = 0.48 + t * 0.58;
+    const mz = -0.15 - Math.sin(t * Math.PI) * 0.055;
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.068, 0.13, 0.11), {
+        rotation: [0.32 - t * 0.38, 0, 0],
+        position: [0, my, mz]
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.032, 0.11, 0.035), {
+        rotation: [0.32 - t * 0.38, 0, 0],
+        position: [0, my + 0.01, mz - 0.048]
+      })
+    );
+  }
 
-  // Crusader Great Helm (Cylinder with Gold Rim, Vertical Crest Fin, and Gold Face Cross)
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.145, 0.152, 0.30, segs), {
-      position: [0, 1.14, -0.04]
-    })
-  );
-  // Gold Great-Helm Top & Bottom Rings
+  // Low Flank Crusader Shield (-X) & Couched Lance (+X) kept low so horse head dominates top-down view
+  addCrossHeaterShield([-0.21, 0.52, 0.04], [0, -Math.PI * 0.42, 0], 0.72, bodyList, goldList);
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.148, 0.016, 8, segs), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.28, -0.04]
+    prepGeo(new THREE.CylinderGeometry(0.016, 0.020, 0.42, 8), {
+      rotation: [1.18, 0, 0],
+      position: [0.21, 0.54, 0.02]
     })
   );
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.154, 0.016, 8, segs), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.00, -0.04]
-    })
-  );
-  // Gold Crusader Cross on front of Great Helm
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.028, 0.24, 0.025), {
-      position: [0, 1.14, 0.108]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.16, 0.028, 0.025), {
-      position: [0, 1.17, 0.108]
-    })
-  );
-  // Helm top sagittal crest fin (visible in Image 3 foreground)
-  bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.032, 0.14, 0.22), {
-      rotation: [0.15, 0, 0],
-      position: [0, 1.35, -0.04]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.036, 0.025, 0.23), {
-      rotation: [0.15, 0, 0],
-      position: [0, 1.42, -0.04]
-    })
-  );
-
-  // Crusader Shoulder Pauldrons & Arms
-  addPauldronsAndArms(0.215, 0.88, 0.08, bodyList, goldList);
-
-  // Left Flank: Crusader Heater Shield
-  addCrossHeaterShield([-0.25, 0.72, 0.06], [0, -Math.PI * 0.42, 0], 0.88, bodyList, goldList);
-
-  // Right Flank: Couched Jousting Lance / Spear angled forward (+Z), kept cleanly within square bounds
-  goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.018, 0.022, 0.48, 10), {
-      rotation: [1.08, 0, 0],
-      position: [0.24, 0.68, -0.02]
-    })
-  );
-  // Gold Vamplate Hand-cone on Lance
-  goldList.push(
-    prepGeo(new THREE.ConeGeometry(0.065, 0.10, 12), {
-      rotation: [1.08, 0, 0],
-      position: [0.24, 0.74, 0.09]
-    })
-  );
-  // Steel Lance Tip extending forward (within z <= 0.44)
   steelList.push(
-    prepGeo(new THREE.ConeGeometry(0.038, 0.38, 8), {
-      rotation: [1.08, 0, 0],
-      position: [0.24, 0.84, 0.27]
+    prepGeo(new THREE.ConeGeometry(0.032, 0.28, 8), {
+      rotation: [1.18, 0, 0],
+      position: [0.21, 0.65, 0.25]
     })
   );
+
+  // Top Identifier: Ember Red Stylized Horse-Head Crest integrated onto the upper poll/crown
+  addKnightTopHorseEmblem(1.155, 0.04, 0.96, 0.05, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
 /**
- * 4. BISHOP — Mitred Cleric with Sculpted Face, Tall Spiraled Golden Crosier Staff & Gold-Bound Tome
- * Matches Images 1, 3, 4, 5.
+ * 4. BISHOP (ARCANE ROYALTY) — Cathedral Prelate with Divided Cleft Mitre & Arcane Cyan Sacred Diamond
  */
 function buildBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const segs = detail === 'high' ? 28 : 14;
@@ -754,166 +1085,123 @@ function buildBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addOctagonalPedestal(0.37, segs, bodyList, goldList);
+  addOctagonalPedestal(0.36, segs, bodyList, goldList);
 
   // Tall Pleated Ecclesiastical Cassock Robe
   bodyList.push(
     createSculptedLathe(
       [
-        [0.29, 0.16],
-        [0.25, 0.42],
-        [0.21, 0.72],
-        [0.22, 0.94],
-        [0.15, 1.02],
+        [0.28, 0.16],
+        [0.24, 0.42],
+        [0.20, 0.72],
+        [0.21, 0.94],
+        [0.145, 1.02],
         [0.001, 1.04]
       ],
       segs
     )
   );
-  addSkirtGoldStrips(8, 0.285, 0.212, 0.17, 0.72, goldList);
+  addSkirtGoldStrips(8, 0.275, 0.205, 0.17, 0.72, goldList);
 
   // Gold Waist Cincture & Front Stole
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.215, 0.018, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.208, 0.017, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
       position: [0, 0.72, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.065, 0.48, 0.022), {
+    prepGeo(new THREE.BoxGeometry(0.062, 0.46, 0.022), {
       rotation: [-0.08, 0, 0],
-      position: [0, 0.48, 0.23]
+      position: [0, 0.48, 0.22]
     })
   );
 
-  // Shoulder Pauldrons & Arms
-  addPauldronsAndArms(0.21, 0.90, 0.16, bodyList, goldList);
-
-  // Sculpted Cleric Head & Face (visible under Mitre in Image 1 & 4)
+  // Shoulder Pauldrons, Arms, Cleric Head & Face
+  addPauldronsAndArms(0.195, 0.88, 0.14, bodyList, goldList);
   faceList.push(
-    prepGeo(new THREE.CylinderGeometry(0.115, 0.11, 0.18, 18), {
-      position: [0, 1.09, 0.01]
+    prepGeo(new THREE.CylinderGeometry(0.112, 0.108, 0.16, 16), {
+      position: [0, 1.08, 0.01]
     })
   );
-  // Sculpted Nose & Brow
-  faceList.push(
-    prepGeo(new THREE.ConeGeometry(0.024, 0.06, 4), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.09, 0.125]
-    })
-  );
-  // Dark Eyes
   for (const side of [-1, 1]) {
     steelList.push(
       prepGeo(new THREE.SphereGeometry(0.014, 8, 8), {
-        position: [side * 0.042, 1.11, 0.112]
+        position: [side * 0.04, 1.10, 0.108]
       })
     );
   }
 
-  // Tall Pointed Bishop's Mitre Hat with Gold Rim & Front Gold Cross
-  bodyList.push(
-    prepGeo(new THREE.ConeGeometry(0.148, 0.40, segs), {
-      scale: [1.0, 1.0, 0.76],
-      position: [0, 1.37, 0]
-    })
-  );
+  // Pointed Angular Divided/Cleft Cathedral Mitre (physically split into two angled pointed mitre lobes!)
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.145, 0.018, 8, segs), {
-      scale: [1.0, 0.78, 1.0],
+    prepGeo(new THREE.TorusGeometry(0.155, 0.018, 8, segs), {
+      scale: [0.86, 1.12, 1.0],
       rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.18, 0]
+      position: [0, 1.16, 0]
     })
   );
-  // Gold Cross on Front of Mitre
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.024, 0.24, 0.025), {
-      rotation: [0.26, 0, 0],
-      position: [0, 1.33, 0.082]
+  // Base cushion of the mitre (closed surface so Markers OFF still looks complete)
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.135, 0.152, 0.16, segs), {
+      scale: [0.85, 1.0, 1.14],
+      position: [0, 1.24, 0]
     })
   );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.13, 0.024, 0.025), {
-      rotation: [0.26, 0, 0],
-      position: [0, 1.34, 0.08]
-    })
-  );
-  // Mitre Peak Gold Finial
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.024, 8, 8), {
-      position: [0, 1.57, 0]
-    })
-  );
-
-  // Iconic Tall Spiraled Golden Crosier Staff (Right side of screen / piece's left hand at +X = 0.23)
-  // Matches the giant golden spiral crook in the right foreground of Image 1 & 4!
-  goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.022, 0.024, 1.24, 12), {
-      position: [0.23, 0.76, 0.12]
-    })
-  );
-  // Collar rings on Crosier shaft
-  for (const cy of [0.35, 0.85, 1.34]) {
+  // Two Physically Split Pointed Mitre Crests separated by a clear diagonal cleft channel!
+  for (const side of [-1, 1]) {
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.105, 0.24, 4), {
+        scale: [0.72, 1.0, 1.38],
+        rotation: [0, Math.PI / 4 + 0.35, side * -0.24],
+        position: [side * 0.078, 1.33, side * 0.032],
+        flatShaded: true
+      })
+    );
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(0.032, 0.01, 8, 14), {
-        rotation: [Math.PI / 2, 0, 0],
-        position: [0.23, cy, 0.12]
+      prepGeo(new THREE.BoxGeometry(0.022, 0.21, 0.15), {
+        rotation: [0, 0.35, side * -0.24],
+        position: [side * 0.115, 1.31, side * 0.045]
       })
     );
   }
-  // Outer Spiral Crook Loop
+
+  // Tucked Spiraled Golden Crosier Staff (+X = 0.20, kept below y = 1.12 so mitre dominates overhead!)
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.125, 0.026, 12, 24, Math.PI * 1.65), {
+    prepGeo(new THREE.CylinderGeometry(0.018, 0.020, 0.86, 10), {
+      position: [0.20, 0.58, 0.10]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.088, 0.020, 10, 18, Math.PI * 1.65), {
       rotation: [0, Math.PI / 2, Math.PI * 0.15],
-      position: [0.23, 1.48, 0.12]
-    })
-  );
-  // Inner Spiral Crook Curl
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.068, 0.022, 10, 18, Math.PI * 1.5), {
-      rotation: [0, Math.PI / 2, -Math.PI * 0.6],
-      position: [0.23, 1.47, 0.12]
-    })
-  );
-  // Central Golden Orb inside the Spiral Crook
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.036, 12, 12), {
-      position: [0.23, 1.47, 0.12]
+      position: [0.20, 1.05, 0.10]
     })
   );
 
-  // Other Hand (-X = -0.18): Gold-Bound Scripture Book / Tome held at chest
+  // Scripture Tome held at chest (-X = -0.17)
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.15, 0.19, 0.045), {
+    prepGeo(new THREE.BoxGeometry(0.14, 0.18, 0.042), {
       rotation: [-0.35, -0.25, 0],
-      position: [-0.18, 0.78, 0.21]
+      position: [-0.17, 0.74, 0.19]
     })
   );
-  bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.125, 0.165, 0.052), {
-      rotation: [-0.35, -0.25, 0],
-      position: [-0.18, 0.78, 0.214]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.02, 0.11, 0.058), {
-      rotation: [-0.35, -0.25, 0],
-      position: [-0.18, 0.78, 0.216]
-    })
-  );
+
+  // Top Identifier: Arcane Cyan Sacred Diamond nestled inside the divided mitre cleft
+  addBishopTopDiamondEmblem(1.322, 1.02, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
 /**
- * 5. QUEEN — Crowned Sovereign with Sculpted Face, Veil, Spiked Gold Crown, Trident Scepter & Royal Plaque
- * Matches Images 1, 3, 4, 5.
+ * 5. QUEEN (ARCANE ROYALTY) — Sovereign Empress with Wide 8-Point Radial Coronet & Amethyst 8-Point Star
  */
 function buildQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const segs = detail === 'high' ? 32 : 16;
@@ -921,6 +1209,7 @@ function buildQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addOctagonalPedestal(0.39, segs, bodyList, goldList);
 
@@ -928,157 +1217,120 @@ function buildQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
   bodyList.push(
     createSculptedLathe(
       [
-        [0.31, 0.16],
-        [0.27, 0.48],
-        [0.21, 0.80], // Waist
-        [0.22, 1.06], // Upper bust
-        [0.15, 1.14], // Neck
-        [0.001, 1.16]
+        [0.30, 0.16],
+        [0.26, 0.48],
+        [0.20, 0.80],
+        [0.21, 1.04],
+        [0.145, 1.13],
+        [0.001, 1.15]
       ],
       segs
     )
   );
-  addSkirtGoldStrips(8, 0.305, 0.212, 0.17, 0.80, goldList);
+  addSkirtGoldStrips(8, 0.295, 0.205, 0.17, 0.80, goldList);
 
-  // Sculpted Royal Bust Relief in front (+Z) matching Image 1 & 4
-  for (const side of [-1, 1]) {
-    bodyList.push(
-      prepGeo(new THREE.SphereGeometry(0.078, 12, 12), {
-        position: [side * 0.075, 0.96, 0.165]
-      })
-    );
-  }
-
-  // Gold Waist Belt & Collar
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.215, 0.02, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.208, 0.018, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
       position: [0, 0.80, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.165, 0.018, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.158, 0.016, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.13, 0]
+      position: [0, 1.12, 0]
     })
   );
 
-  // Shoulder Pauldrons & Arms
-  addPauldronsAndArms(0.225, 1.02, 0.16, bodyList, goldList);
-
-  // Sculpted Queen Head & Face + Draped Royal Veil
+  // Shoulder Pauldrons, Arms, Sculpted Queen Head & Veil
+  addPauldronsAndArms(0.21, 0.98, 0.14, bodyList, goldList);
   faceList.push(
-    prepGeo(new THREE.CylinderGeometry(0.115, 0.11, 0.20, 18), {
-      position: [0, 1.24, 0.01]
-    })
-  );
-  faceList.push(
-    prepGeo(new THREE.ConeGeometry(0.022, 0.055, 4), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.24, 0.125]
+    prepGeo(new THREE.CylinderGeometry(0.112, 0.108, 0.19, 18), {
+      position: [0, 1.23, 0.01]
     })
   );
   for (const side of [-1, 1]) {
     steelList.push(
-      prepGeo(new THREE.SphereGeometry(0.014, 8, 8), {
-        position: [side * 0.042, 1.26, 0.112]
-      })
-    );
-    // Side veil lappets framing the face
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.045, 0.24, 0.14), {
-        rotation: [0, 0, side * -0.12],
-        position: [side * 0.125, 1.22, -0.01]
+      prepGeo(new THREE.SphereGeometry(0.013, 8, 8), {
+        position: [side * 0.04, 1.25, 0.108]
       })
     );
   }
-  // Back veil drape
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.125, 0.16, 0.26, 12, 1, false, Math.PI * 0.6, Math.PI * 0.8), {
-      position: [0, 1.22, 0]
-    })
-  );
 
-  // Open Multi-Spiked Golden Queen's Crown (matching Image 1 & 4)
-  goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.142, 0.132, 0.08, 16), {
-      position: [0, 1.37, 0]
+  // Wide Flared 8-Point Radial Sovereign Coronet (markedly more radial & starburst than King!)
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.178, 0.132, 0.085, 16), {
+      position: [0, 1.345, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.142, 0.018, 8, 20), {
+    prepGeo(new THREE.TorusGeometry(0.178, 0.017, 8, 24), {
       rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.34, 0]
+      position: [0, 1.385, 0]
     })
   );
-  const spikeCount = 8;
-  for (let i = 0; i < spikeCount; i++) {
-    const angle = (i * Math.PI * 2) / spikeCount;
-    const r = 0.135;
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.022, 0.18, 6), {
-        rotation: [Math.sin(angle) * 0.1, 0, -Math.cos(angle) * 0.1],
-        position: [Math.cos(angle) * r, 1.48, Math.sin(angle) * r]
+
+  // 8 Prominent Outward-Flaring Radial Crown Petals / Points
+  const crownPoints = 8;
+  for (let i = 0; i < crownPoints; i++) {
+    const angle = (i * Math.PI * 2) / crownPoints;
+    const tilt = 0.52;
+    const r = 0.192;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.042, 0.145, 4), {
+        rotation: [Math.cos(angle) * tilt, angle, -Math.sin(angle) * tilt],
+        position: [Math.sin(angle) * r, 1.435, Math.cos(angle) * r],
+        flatShaded: true
       })
     );
     goldList.push(
-      prepGeo(new THREE.SphereGeometry(0.014, 6, 6), {
-        position: [Math.cos(angle) * (r + 0.01), 1.57, Math.sin(angle) * (r + 0.01)]
+      prepGeo(new THREE.ConeGeometry(0.026, 0.155, 4), {
+        rotation: [Math.cos(angle) * tilt, angle, -Math.sin(angle) * tilt],
+        position: [Math.sin(angle) * (r + 0.012), 1.445, Math.cos(angle) * (r + 0.012)],
+        flatShaded: true
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.016, 8, 8), {
+        position: [Math.sin(angle) * 0.232, 1.495, Math.cos(angle) * 0.232]
       })
     );
   }
 
-  // Left Hand (+X = 0.24): Tall Golden Three-Pronged Royal Scepter / Trident
+  // Tucked Royal Scepter (+X = 0.21, kept below y = 1.18 so the 8-point coronet is 100% unobstructed)
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.018, 0.022, 1.32, 10), {
-      rotation: [0, 0, -0.05],
-      position: [0.24, 0.82, 0.12]
+    prepGeo(new THREE.CylinderGeometry(0.016, 0.020, 0.92, 8), {
+      position: [0.21, 0.64, 0.10]
     })
   );
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.12, 0.024, 0.028), {
-      position: [0.26, 1.48, 0.12]
+    prepGeo(new THREE.OctahedronGeometry(0.045, 0), {
+      position: [0.21, 1.13, 0.10]
     })
   );
-  for (const offset of [-0.05, 0, 0.05]) {
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.016, 0.18, 6), {
-        position: [0.26 + offset, 1.57, 0.12]
-      })
-    );
-  }
 
-  // Right Hand (-X = -0.19): Royal Crest Shield Plaque
-  bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.16, 0.24, 0.036), {
-      rotation: [0.1, -0.2, 0],
-      position: [-0.19, 0.84, 0.21]
-    })
-  );
+  // Royal Crest Plaque (-X = -0.18)
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.172, 0.252, 0.028), {
+    prepGeo(new THREE.BoxGeometry(0.15, 0.22, 0.032), {
       rotation: [0.1, -0.2, 0],
-      position: [-0.19, 0.84, 0.205]
+      position: [-0.18, 0.80, 0.19]
     })
   );
-  goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.038, 0), {
-      rotation: [0.1, -0.2, 0],
-      position: [-0.19, 0.84, 0.23]
-    })
-  );
+
+  // Top Identifier: Amethyst Purple Eight-Pointed Gemstone Star in center of radial coronet
+  addQueenTopEightPointStarEmblem(1.388, 1.04, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
 /**
- * 6. KING — Bearded Monarch with Broad Pauldrons, Arched Imperial Crown with Cross & Downward Royal Greatsword
- * Matches Images 1, 3, 4, 5.
+ * 6. KING (ARCANE ROYALTY) — Sovereign Monarch with Dominant 4-Arch Imperial Crown & Royal Gold Cross
  */
 function buildKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const segs = detail === 'high' ? 32 : 16;
@@ -1086,6 +1338,7 @@ function buildKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addOctagonalPedestal(0.42, segs, bodyList, goldList);
 
@@ -1096,8 +1349,8 @@ function buildKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.34, 0.16],
         [0.30, 0.52],
         [0.25, 0.84],
-        [0.27, 1.14], // Broad chest
-        [0.18, 1.22], // Collar
+        [0.27, 1.14],
+        [0.18, 1.22],
         [0.001, 1.24]
       ],
       segs
@@ -1105,7 +1358,6 @@ function buildKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   );
   addSkirtGoldStrips(8, 0.335, 0.252, 0.17, 0.84, goldList);
 
-  // Gold Waist Belt & Square Golden Chest Tabard Plaque (visible in Image 1 & 4)
   goldList.push(
     prepGeo(new THREE.TorusGeometry(0.255, 0.022, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
@@ -1118,121 +1370,89 @@ function buildKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
     })
   );
 
-  // Broad Imperial Shoulder Pauldrons & Arms reaching inward to clasp the Greatsword Hilt
+  // Broad Imperial Shoulder Pauldrons & Arms Clasping the Royal Greatsword Hilt
   for (const side of [-1, 1]) {
     bodyList.push(
-      prepGeo(new THREE.SphereGeometry(0.125, 14, 12), {
-        scale: [1.1, 0.92, 1.1],
-        position: [side * 0.27, 1.10, 0.02]
+      prepGeo(new THREE.SphereGeometry(0.122, 14, 12), {
+        scale: [1.08, 0.92, 1.08],
+        position: [side * 0.26, 1.10, 0.02]
       })
     );
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(0.118, 0.018, 8, 18), {
+      prepGeo(new THREE.TorusGeometry(0.114, 0.018, 8, 18), {
         rotation: [Math.PI / 2 + 0.15, side * 0.45, 0],
-        position: [side * 0.27, 1.06, 0.02]
+        position: [side * 0.26, 1.06, 0.02]
       })
     );
-    // Forearms angled inward toward x = 0, y = 0.88, z = 0.28
     bodyList.push(
-      prepGeo(new THREE.CylinderGeometry(0.052, 0.048, 0.28, 10), {
+      prepGeo(new THREE.CylinderGeometry(0.050, 0.046, 0.28, 10), {
         rotation: [0.85, 0, side * 0.65],
         position: [side * 0.15, 0.96, 0.16]
       })
     );
-    // Clasped gauntlets on sword hilt
-    bodyList.push(
-      prepGeo(new THREE.SphereGeometry(0.052, 10, 10), {
-        position: [side * 0.035, 0.89, 0.27]
-      })
-    );
   }
 
-  // Sculpted Bearded Monarch Head (matching Image 1, 3, 4)
+  // Sculpted Bearded Monarch Head
   faceList.push(
-    prepGeo(new THREE.CylinderGeometry(0.135, 0.13, 0.22, 18), {
+    prepGeo(new THREE.CylinderGeometry(0.132, 0.128, 0.21, 18), {
       position: [0, 1.33, 0.01]
     })
   );
-  // Sculpted Nose
-  faceList.push(
-    prepGeo(new THREE.ConeGeometry(0.026, 0.06, 4), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.34, 0.145]
-    })
-  );
-  // Sculpted Beard & Mustache (in ivory/obsidian body material, matching reference)
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.19, 0.11, 0.12), {
-      position: [0, 1.24, 0.095]
+    prepGeo(new THREE.BoxGeometry(0.18, 0.10, 0.11), {
+      position: [0, 1.24, 0.092]
     })
   );
-  bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.13, 0.032, 0.04), {
-      position: [0, 1.30, 0.145]
-    })
-  );
-  // Dark Eyes & Brow
   for (const side of [-1, 1]) {
     steelList.push(
-      prepGeo(new THREE.SphereGeometry(0.016, 8, 8), {
-        position: [side * 0.048, 1.36, 0.135]
+      prepGeo(new THREE.SphereGeometry(0.015, 8, 8), {
+        position: [side * 0.046, 1.36, 0.132]
       })
     );
   }
 
-  // High Imperial Arched Gold Crown with Cross Finial
-  goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.165, 0.152, 0.09, 20), {
-      position: [0, 1.47, 0]
+  // Dominant Octagonal Sovereign Crown Cushion (uses faction body material so White vs Black is crystal clear!)
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.185, 0.155, 0.11, 8), {
+      rotation: [0, Math.PI / 8, 0],
+      position: [0, 1.46, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.162, 0.022, 10, 24), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.43, 0]
+    prepGeo(new THREE.TorusGeometry(0.162, 0.020, 8, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, 1.415, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.168, 0.018, 10, 24), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.51, 0]
+    prepGeo(new THREE.TorusGeometry(0.188, 0.018, 8, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, 1.515, 0]
     })
   );
-  // 4 Imperial Crown Arches meeting at top monde orb
+  // 4 Bold Cardinal Sovereign Fleur-de-Lis Crown Bastions (0°, 90°, 180°, 270° — orthogonal vs Queen's 8-ray starburst!)
   for (let i = 0; i < 4; i++) {
-    const angle = (i * Math.PI) / 2;
+    const a = (i * Math.PI) / 2;
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(0.155, 0.018, 8, 18, Math.PI), {
-        rotation: [0, angle, 0],
-        position: [0, 1.51, 0]
+      prepGeo(new THREE.BoxGeometry(0.075, 0.11, 0.042), {
+        rotation: [0, -a, 0],
+        position: [Math.sin(a) * 0.186, 1.555, Math.cos(a) * 0.186]
       })
     );
   }
-  // Crown Monde Orb & Sovereign Cross Finial
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.038, 10, 10), {
-      position: [0, 1.69, 0]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.036, 0.16, 0.036), {
-      position: [0, 1.79, 0]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.13, 0.036, 0.036), {
-      position: [0, 1.80, 0]
-    })
-  );
 
-  // Downward-Pointing Two-Handed Royal Greatsword in front (z = 0.28)
-  addMedievalSword([0, 0.80, 0.28], [0, 0, 0], 0.62, true, goldList, steelList);
+  // Downward-Pointing Two-Handed Royal Greatsword in front (z = 0.27)
+  addMedievalSword([0, 0.80, 0.27], [0, 0, 0], 0.60, true, goldList, steelList);
+
+  // Top Identifier: Royal Gold Heraldic Cross Pattée + Vertical Sovereign Cross Crest
+  addKingTopCrownCrossEmblem(1.516, 1.06, detail, goldList, steelList, markerList, true);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -1380,269 +1600,314 @@ function addWarforgedBattleaxe(
 }
 
 function buildWarforgedPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 12 : 6;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addWarforgedPedestal(0.36, bodyList, goldList, steelList);
+  addWarforgedPedestal(0.34, bodyList, goldList, steelList);
 
-  // Heavy 6-sided faceted construct torso & armored skirt
+  // Compact 6-sided faceted construct torso & armored skirt (noticeably shorter & simpler than major pieces!)
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.22, 0.29, 0.44, 6), {
+    prepGeo(new THREE.CylinderGeometry(0.19, 0.26, 0.38, segs), {
       rotation: [0, Math.PI / 6, 0],
-      position: [0, 0.38, 0],
+      position: [0, 0.35, 0],
       flatShaded: true
     })
   );
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.38, 0.32, 0.30), {
-      position: [0, 0.70, 0],
-      flatShaded: true
-    })
-  );
-  // Runic rib bands
-  for (const y of [0.34, 0.56, 0.76]) {
-    goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.41, 0.035, 0.33), {
-        position: [0, y, 0],
-        flatShaded: true
-      })
-    );
-  }
-
-  // Heavy angular dreadnought shoulder plates
-  for (const side of [-1, 1]) {
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.16, 0.18, 0.22), {
-        rotation: [0, 0, side * -0.25],
-        position: [side * 0.24, 0.78, 0.02],
-        flatShaded: true
-      })
-    );
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.04, 0.12, 4), {
-        rotation: [0, Math.PI / 4, side * -0.35],
-        position: [side * 0.27, 0.91, 0.02],
-        flatShaded: true
-      })
-    );
-  }
-
-  // Hexagonal Greathelm with Glowing Visor Slit & Twin Curved Bull-Horns
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.14, 0.16, 0.24, 6), {
-      rotation: [0, Math.PI / 6, 0],
-      position: [0, 0.96, 0],
-      flatShaded: true
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.18, 0.04, 0.04), {
-      position: [0, 0.98, 0.14]
-    })
-  );
-  for (const side of [-1, 1]) {
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.042, 0.24, 5), {
-        rotation: [0.2, 0, side * -0.85],
-        position: [side * 0.20, 1.07, 0],
-        flatShaded: true
-      })
-    );
-  }
-
-  // Left Hand: Tower Pavise Shield; Right Hand: Double-Bitted Runic Battleaxe
-  addWarforgedTowerShield([-0.19, 0.56, 0.22], [-0.08, -0.22, 0], 0.95, bodyList, goldList, steelList);
-  addWarforgedBattleaxe([0.23, 0.44, 0.18], [0.12, 0, 0], 0.95, goldList, steelList);
-
-  return {
-    body: finalizeMerged(bodyList),
-    gold: finalizeMerged(goldList),
-    steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
-  };
-}
-
-function buildWarforgedRookGeometry(_detail: PieceDetailLevel): PieceMeshParts {
-  const bodyList: THREE.BufferGeometry[] = [];
-  const goldList: THREE.BufferGeometry[] = [];
-  const steelList: THREE.BufferGeometry[] = [];
-  const faceList: THREE.BufferGeometry[] = [];
-
-  addWarforgedPedestal(0.41, bodyList, goldList, steelList);
-
-  // Squat, massive sloped-armor Iron Juggernaut Citadel core
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.28, 0.35, 0.88, 4), {
-      rotation: [0, Math.PI / 4, 0],
+    prepGeo(new THREE.BoxGeometry(0.31, 0.24, 0.26), {
       position: [0, 0.60, 0],
       flatShaded: true
     })
   );
-
-  // 4 Massive Projecting Corner Fortress Buttress Pylons with Sloped Rams
-  for (let i = 0; i < 4; i++) {
-    const a = (i * Math.PI) / 2 + Math.PI / 4;
-    const cx = Math.cos(a) * 0.26;
-    const cz = Math.sin(a) * 0.26;
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.18, 0.96, 0.18), {
-        rotation: [0, -a, 0],
-        position: [cx, 0.64, cz],
-        flatShaded: true
-      })
-    );
+  for (const y of [0.32, 0.52, 0.68]) {
     goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.20, 0.06, 0.20), {
-        rotation: [0, -a, 0],
-        position: [cx, 1.14, cz],
-        flatShaded: true
-      })
-    );
-    // Corner anvil spikes
-    steelList.push(
-      prepGeo(new THREE.ConeGeometry(0.065, 0.18, 4), {
-        rotation: [0, -a + Math.PI / 4, 0],
-        position: [cx, 1.25, cz],
-        flatShaded: true
-      })
-    );
-  }
-
-  // Heavy Horizontal Forged Gold Armor Straps
-  for (const y of [0.36, 0.68, 0.98]) {
-    goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.56, 0.045, 0.56), {
+      prepGeo(new THREE.BoxGeometry(0.33, 0.03, 0.28), {
         position: [0, y, 0],
         flatShaded: true
       })
     );
   }
 
-  // Central Spiked War-Brazier Crown on top of the Rook
-  goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.16, 0), {
-      position: [0, 1.18, 0],
+  // Compact tucked shoulder guards (no wide horns or spikes that could mimic King/Knight!)
+  for (const side of [-1, 1]) {
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.11, 0.13, 0.17), {
+        rotation: [0, 0, side * -0.18],
+        position: [side * 0.18, 0.64, 0.01],
+        flatShaded: true
+      })
+    );
+  }
+
+  // Clean Compact Forged Dome Greathelm Cap (unmistakable rounded-hex Pawn cap from overhead!)
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.152, 0.158, 0.13, segs), {
+      rotation: [0, Math.PI / 6, 0],
+      position: [0, 0.78, 0],
       flatShaded: true
     })
   );
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.156, segs, 6, 0, Math.PI * 2, 0, Math.PI * 0.52), {
+      scale: [1.0, 0.42, 1.0],
+      position: [0, 0.84, 0],
+      flatShaded: true
+    })
+  );
+  // Front visor slit
+  goldList.push(
+    prepGeo(new THREE.BoxGeometry(0.16, 0.032, 0.036), {
+      position: [0, 0.79, 0.145],
+      flatShaded: true
+    })
+  );
+
+  // Tucked Low Tower Pavise Shield & Compact Hand-Axe (strictly below helm height)
+  addWarforgedTowerShield([-0.16, 0.45, 0.18], [-0.08, -0.22, 0], 0.78, bodyList, goldList, steelList);
+  addWarforgedBattleaxe([0.19, 0.34, 0.15], [0.14, 0, 0], 0.72, goldList, steelList);
+
+  // Top Identifier: Pearl Silver Forged Rivet Single Dot Medallion
+  addPawnTopDotEmblem(0.895, 0.98, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
-function buildWarforgedKnightGeometry(_detail: PieceDetailLevel): PieceMeshParts {
+function buildWarforgedRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 12 : 6;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
+
+  addWarforgedPedestal(0.41, bodyList, goldList, steelList);
+
+  // Massive Sloped Square Iron Juggernaut Citadel Tower
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.27, 0.34, 0.84, 4), {
+      rotation: [0, Math.PI / 4, 0],
+      position: [0, 0.58, 0],
+      flatShaded: true
+    })
+  );
+  // Inner cylindrical structural drum for rich bevel highlights & LOD scaling
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.22, 0.25, 0.82, segs), {
+      position: [0, 0.58, 0],
+      flatShaded: true
+    })
+  );
+
+  // Heavy Horizontal Forged Gold Armor Straps
+  for (const y of [0.35, 0.64, 0.92]) {
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.50, 0.042, 0.50), {
+        position: [0, y, 0],
+        flatShaded: true
+      })
+    );
+  }
+
+  // Broad Flat Square Citadel Parapet Deck (faction body material so White vs Black is unmistakable!)
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.50, 0.09, 0.50), {
+      position: [0, 1.01, 0],
+      flatShaded: true
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.BoxGeometry(0.53, 0.032, 0.53), {
+      position: [0, 0.965, 0],
+      flatShaded: true
+    })
+  );
+
+  // 4 Bold Square Corner Fortress Buttress Pylons & Crenellated Merlons (90° square fortress silhouette!)
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const cx = sx * 0.185;
+      const cz = sz * 0.185;
+      bodyList.push(
+        prepGeo(new THREE.BoxGeometry(0.155, 0.94, 0.155), {
+          position: [cx, 0.62, cz],
+          flatShaded: true
+        })
+      );
+      bodyList.push(
+        prepGeo(new THREE.BoxGeometry(0.145, 0.13, 0.145), {
+          position: [cx, 1.115, cz],
+          flatShaded: true
+        })
+      );
+      goldList.push(
+        prepGeo(new THREE.BoxGeometry(0.158, 0.028, 0.158), {
+          position: [cx, 1.185, cz],
+          flatShaded: true
+        })
+      );
+    }
+  }
+
+  // Top Identifier: Emerald Green Mechanical Fortress / Castle Tower Emblem on flat square deck
+  addRookTopFortressEmblem(1.055, 1.02, detail, goldList, markerList);
+
+  return {
+    body: finalizeMerged(bodyList),
+    gold: finalizeMerged(goldList),
+    steel: finalizeMerged(steelList),
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
+  };
+}
+
+function buildWarforgedKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 14 : 8;
+  const bodyList: THREE.BufferGeometry[] = [];
+  const goldList: THREE.BufferGeometry[] = [];
+  const steelList: THREE.BufferGeometry[] = [];
+  const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addWarforgedPedestal(0.39, bodyList, goldList, steelList);
 
   // Armored Construct Base Chassis
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.24, 0.31, 0.42, 6), {
+    prepGeo(new THREE.CylinderGeometry(0.24, 0.31, 0.36, segs), {
       rotation: [0, Math.PI / 6, 0],
-      position: [0, 0.36, 0],
+      position: [0, 0.33, 0],
       flatShaded: true
     })
   );
 
-  // Angular Mechanized War-Charger Neck & Head built from faceted armor plates
+  // Prominent Asymmetric Mechanized Warhorse Neck, Poll & Forward-Projecting Snout (+Z)
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.26, 0.56, 0.34), {
-      rotation: [0.28, 0, 0],
-      position: [0, 0.72, 0.06],
+    prepGeo(new THREE.BoxGeometry(0.25, 0.56, 0.32), {
+      rotation: [0.22, 0, 0],
+      position: [0, 0.72, 0.03],
       flatShaded: true
     })
   );
-  // Angular Armored Charger Snout projecting forward
   bodyList.push(
-    prepGeo(new THREE.ConeGeometry(0.18, 0.44, 4), {
-      rotation: [Math.PI * 0.62, Math.PI / 4, 0],
-      position: [0, 0.92, 0.28],
+    prepGeo(new THREE.CylinderGeometry(0.14, 0.15, 0.22, segs), {
+      scale: [0.95, 1.0, 1.18],
+      position: [0, 1.03, 0.04],
       flatShaded: true
     })
   );
-  // Glowing Golden Chamfron Face-Plate & Brow Horns
+  // Long Tapered Armored Horse Snout projecting forward to z = +0.37 (unmistakable horse profile from above!)
+  bodyList.push(
+    prepGeo(new THREE.ConeGeometry(0.155, 0.44, 4), {
+      scale: [0.85, 1.0, 0.92],
+      rotation: [Math.PI * 0.58, Math.PI / 4, 0],
+      position: [0, 0.94, 0.24],
+      flatShaded: true
+    })
+  );
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.16, 0.10, 0.36), {
-      rotation: [0.38, 0, 0],
-      position: [0, 0.98, 0.24],
+    prepGeo(new THREE.BoxGeometry(0.11, 0.055, 0.28), {
+      rotation: [0.30, 0, 0],
+      position: [0, 1.01, 0.22],
       flatShaded: true
     })
   );
+  // Ember Red Forged Chamfron Nasal Accent Stripe along snout bridge
+  markerList.push(
+    prepGeo(new THREE.BoxGeometry(0.044, 0.032, 0.20), {
+      rotation: [0.30, 0, 0],
+      position: [0, 1.032, 0.24],
+      flatShaded: true
+    })
+  );
+
+  // Swept Armored Warhorse Ears at Crown
   for (const side of [-1, 1]) {
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.045, 0.24, 4), {
-        rotation: [-0.45, 0, side * -0.35],
-        position: [side * 0.12, 1.16, 0.06],
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.042, 0.19, 4), {
+        rotation: [-0.28, 0, side * -0.22],
+        position: [side * 0.095, 1.18, -0.03],
         flatShaded: true
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.02, 8, 8), {
+        position: [side * 0.115, 1.00, 0.14]
       })
     );
   }
 
-  // Prominent Saw-Toothed Dorsal Metal Mane Crest (4 angled steel/gold fins along back of neck)
-  for (let i = 0; i < 4; i++) {
-    const fy = 0.62 + i * 0.15;
-    const fz = -0.12 + i * 0.04;
-    goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.05, 0.14, 0.18), {
-        rotation: [0.55, 0, 0],
+  // Prominent Saw-Toothed Dorsal Metal Mane Crest along back spine (-Z)
+  for (let i = 0; i < 5; i++) {
+    const fy = 0.54 + i * 0.135;
+    const fz = -0.14 - Math.sin((i / 4) * Math.PI) * 0.05;
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.068, 0.12, 0.16), {
+        rotation: [0.45, 0, 0],
         position: [0, fy, fz],
         flatShaded: true
       })
     );
+    goldList.push(
+      prepGeo(new THREE.BoxGeometry(0.036, 0.13, 0.17), {
+        rotation: [0.45, 0, 0],
+        position: [0, fy + 0.01, fz - 0.02],
+        flatShaded: true
+      })
+    );
   }
 
-  // Twin Flank Weapons: Left Tower Shield + Right Heavy Diamond War-Lance
-  addWarforgedTowerShield([-0.24, 0.66, 0.08], [0, -Math.PI * 0.38, 0], 0.85, bodyList, goldList, steelList);
+  // Tucked Low Flank Shield & Lance (kept low at y <= 0.65 so horse silhouette dominates from top-down!)
+  addWarforgedTowerShield([-0.21, 0.52, 0.06], [0, -Math.PI * 0.42, 0], 0.72, bodyList, goldList, steelList);
   steelList.push(
-    prepGeo(new THREE.ConeGeometry(0.06, 0.52, 4), {
-      rotation: [1.12, Math.PI / 4, 0],
-      position: [0.24, 0.78, 0.18],
+    prepGeo(new THREE.ConeGeometry(0.048, 0.42, 4), {
+      rotation: [1.32, Math.PI / 4, 0],
+      position: [0.21, 0.58, 0.16],
       flatShaded: true
     })
   );
-  goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.085, 0), {
-      position: [0.24, 0.68, 0.04],
-      flatShaded: true
-    })
-  );
+
+  // Top Identifier: Ember Red Stylized Horse-Head Crest on upper horse poll
+  addKnightTopHorseEmblem(1.135, 0.04, 0.96, 0.06, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
-function buildWarforgedBishopGeometry(_detail: PieceDetailLevel): PieceMeshParts {
+function buildWarforgedBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 12 : 6;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addWarforgedPedestal(0.38, bodyList, goldList, steelList);
 
   // Tall 6-sided Armored Runic Inquisitor Cassock
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.19, 0.29, 0.86, 6), {
+    prepGeo(new THREE.CylinderGeometry(0.18, 0.28, 0.84, segs), {
       rotation: [0, Math.PI / 6, 0],
-      position: [0, 0.58, 0],
+      position: [0, 0.57, 0],
       flatShaded: true
     })
   );
   for (const y of [0.36, 0.64, 0.90]) {
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(0.24 - (y - 0.36) * 0.08, 0.022, 6, 6), {
+      prepGeo(new THREE.TorusGeometry(0.23 - (y - 0.36) * 0.08, 0.020, 6, 6), {
         rotation: [Math.PI / 2, 0, Math.PI / 6],
         position: [0, y, 0],
         flatShaded: true
@@ -1650,264 +1915,297 @@ function buildWarforgedBishopGeometry(_detail: PieceDetailLevel): PieceMeshParts
     );
   }
 
-  // Wide Angular Dreadnought Shoulder Mantles
+  // Compact Angular Inquisitor Shoulder Mantle
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.52, 0.16, 0.28), {
+    prepGeo(new THREE.BoxGeometry(0.40, 0.14, 0.25), {
       position: [0, 0.96, 0],
       flatShaded: true
     })
   );
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.55, 0.04, 0.30), {
-      position: [0, 1.04, 0],
+    prepGeo(new THREE.BoxGeometry(0.42, 0.034, 0.27), {
+      position: [0, 1.03, 0],
       flatShaded: true
     })
   );
 
-  // Tall Split-Horned Iron Inquisitor Crown/Hood
+  // Inquisitor Helm Collar + Physically Divided 2-Blade Split Forged Mitre (unmistakable cleft mitre!)
   bodyList.push(
-    prepGeo(new THREE.ConeGeometry(0.16, 0.42, 4), {
-      rotation: [0, Math.PI / 4, 0],
-      position: [0, 1.24, 0],
+    prepGeo(new THREE.CylinderGeometry(0.145, 0.155, 0.15, 6), {
+      rotation: [0, Math.PI / 6, 0],
+      position: [0, 1.12, 0],
       flatShaded: true
     })
   );
   for (const side of [-1, 1]) {
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.095, 0.28, 4), {
+        scale: [0.85, 1.0, 1.25],
+        rotation: [0, Math.PI / 4, side * -0.24],
+        position: [side * 0.085, 1.28, 0],
+        flatShaded: true
+      })
+    );
     goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.045, 0.36, 0.08), {
-        rotation: [0, 0, side * -0.22],
-        position: [side * 0.11, 1.32, 0.02],
+      prepGeo(new THREE.BoxGeometry(0.032, 0.25, 0.15), {
+        rotation: [0, 0, side * -0.24],
+        position: [side * 0.125, 1.27, 0],
         flatShaded: true
       })
     );
   }
-
-  // Right Hand (+X = 0.25): Tall Twin-Pronged Runic Tuning-Fork War-Halberd
-  goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.024, 0.026, 1.32, 6), {
-      position: [0.25, 0.78, 0.12]
+  // Closed cleft cradle deck between the twin mitre blades
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.16, 0.08, 0.24), {
+      position: [0, 1.23, 0],
+      flatShaded: true
     })
   );
+
+  // Tucked Runic Tuning-Fork Halberd (+X = 0.21, kept below y = 1.08 so split mitre dominates overhead!)
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.18, 0.04, 0.05), {
-      position: [0.25, 1.40, 0.12],
-      flatShaded: true
+    prepGeo(new THREE.CylinderGeometry(0.020, 0.022, 0.90, 6), {
+      position: [0.21, 0.60, 0.10]
     })
   );
   for (const side of [-1, 1]) {
     steelList.push(
-      prepGeo(new THREE.BoxGeometry(0.032, 0.26, 0.05), {
-        position: [0.25 + side * 0.065, 1.53, 0.12],
+      prepGeo(new THREE.BoxGeometry(0.026, 0.16, 0.04), {
+        position: [0.21 + side * 0.048, 1.06, 0.10],
         flatShaded: true
       })
     );
   }
-
-  // Left Hand (-X = -0.20): Forged Runic Stone Tablet
+  // Left Hand: Forged Runic Stone Tablet
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.16, 0.24, 0.06), {
-      rotation: [-0.25, -0.2, 0],
-      position: [-0.20, 0.78, 0.20],
+    prepGeo(new THREE.BoxGeometry(0.14, 0.20, 0.05), {
+      rotation: [-0.22, -0.2, 0],
+      position: [-0.18, 0.72, 0.17],
       flatShaded: true
     })
   );
+
+  // Top Identifier: Arcane Cyan Sacred 4-Point Diamond nestled inside the split forged mitre cleft
+  addBishopTopDiamondEmblem(1.272, 1.02, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
-function buildWarforgedQueenGeometry(_detail: PieceDetailLevel): PieceMeshParts {
+function buildWarforgedQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 16 : 8;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addWarforgedPedestal(0.40, bodyList, goldList, steelList);
 
   // Faceted Armored Valkyrie War-Gown & Cuirass
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.20, 0.31, 0.74, 6), {
-      rotation: [0, Math.PI / 6, 0],
+    prepGeo(new THREE.CylinderGeometry(0.20, 0.30, 0.74, segs), {
+      rotation: [0, Math.PI / 8, 0],
       position: [0, 0.52, 0],
       flatShaded: true
     })
   );
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.23, 0.18, 0.34, 6), {
-      rotation: [0, Math.PI / 6, 0],
+    prepGeo(new THREE.CylinderGeometry(0.21, 0.17, 0.32, 8), {
+      rotation: [0, Math.PI / 8, 0],
       position: [0, 0.98, 0],
       flatShaded: true
     })
   );
 
-  // Iconic Sweeping Valhallan Winged Shoulder-Blades flaring outward & upward!
+  // Compact Swept Valkyrie Shoulder Pauldrons (kept at y <= 1.12 so radial 8-blade crown shines cleanly!)
   for (const side of [-1, 1]) {
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.14, 0.52, 4), {
-        scale: [0.35, 1.0, 0.85],
-        rotation: [-0.15, 0, side * -0.58],
-        position: [side * 0.30, 1.18, -0.04],
+    bodyList.push(
+      prepGeo(new THREE.BoxGeometry(0.14, 0.16, 0.17), {
+        position: [side * 0.21, 1.00, 0],
         flatShaded: true
       })
     );
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.15, 0.18, 0.18), {
-        position: [side * 0.22, 1.02, 0],
+    goldList.push(
+      prepGeo(new THREE.ConeGeometry(0.085, 0.28, 4), {
+        scale: [0.35, 1.0, 0.85],
+        rotation: [-0.22, 0, side * -0.48],
+        position: [side * 0.26, 1.05, -0.04],
         flatShaded: true
       })
     );
   }
 
-  // Valkyrie Helm & Jagged 6-Blade Iron/Gold War-Crown
+  // Valkyrie Helm + Wide Flared 8-Blade Radial War-Coronet around an Open Faction Crown Deck!
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.13, 0.14, 0.24, 6), {
-      rotation: [0, Math.PI / 6, 0],
-      position: [0, 1.24, 0],
+    prepGeo(new THREE.CylinderGeometry(0.182, 0.138, 0.24, 8), {
+      rotation: [0, Math.PI / 8, 0],
+      position: [0, 1.26, 0],
       flatShaded: true
     })
   );
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI * 2) / 6;
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.184, 0.018, 6, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, 1.38, 0],
+      flatShaded: true
+    })
+  );
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI * 2) / 8;
+    const tilt = 0.54;
+    const r = 0.196;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.042, 0.15, 4), {
+        rotation: [Math.cos(a) * tilt, a, -Math.sin(a) * tilt],
+        position: [Math.sin(a) * r, 1.43, Math.cos(a) * r],
+        flatShaded: true
+      })
+    );
     goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.036, 0.24, 4), {
-        rotation: [Math.sin(a) * 0.22, -a, -Math.cos(a) * 0.22],
-        position: [Math.cos(a) * 0.14, 1.44, Math.sin(a) * 0.14],
+      prepGeo(new THREE.ConeGeometry(0.028, 0.16, 4), {
+        rotation: [Math.cos(a) * tilt, a, -Math.sin(a) * tilt],
+        position: [Math.sin(a) * (r + 0.014), 1.44, Math.cos(a) * (r + 0.014)],
         flatShaded: true
       })
     );
   }
 
-  // Right Hand (+X = 0.26): Twin-Bladed Runic War-Glaive
+  // Tucked Runic War-Glaive (+X = 0.23, top <= 1.16) & Hexagonal Aegis Shield
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.022, 0.024, 1.42, 6), {
-      position: [0.26, 0.84, 0.12]
+    prepGeo(new THREE.CylinderGeometry(0.020, 0.022, 0.94, 6), {
+      position: [0.23, 0.62, 0.10]
     })
   );
   steelList.push(
-    prepGeo(new THREE.ConeGeometry(0.09, 0.34, 4), {
+    prepGeo(new THREE.ConeGeometry(0.065, 0.22, 4), {
       scale: [0.35, 1.0, 1.0],
-      position: [0.26, 1.62, 0.12],
+      position: [0.23, 1.14, 0.10],
       flatShaded: true
     })
   );
-  // Left Hand (-X = -0.22): Hexagonal Runic Aegis Shield
-  addWarforgedTowerShield([-0.22, 0.82, 0.18], [0.05, -0.25, 0], 0.82, bodyList, goldList, steelList);
+  addWarforgedTowerShield([-0.20, 0.72, 0.16], [0.05, -0.25, 0], 0.74, bodyList, goldList, steelList);
+
+  // Top Identifier: Amethyst Purple Eight-Pointed Star in center of radial war-coronet
+  addQueenTopEightPointStarEmblem(1.382, 1.04, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
-function buildWarforgedKingGeometry(_detail: PieceDetailLevel): PieceMeshParts {
+function buildWarforgedKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
+  const segs = detail === 'high' ? 16 : 8;
   const bodyList: THREE.BufferGeometry[] = [];
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addWarforgedPedestal(0.43, bodyList, goldList, steelList);
 
-  // Colossal 6-Sided Runic War-Emperor Juggernaut Torso
+  // Colossal Faceted Runic War-Emperor Juggernaut Torso
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.25, 0.34, 0.84, 6), {
-      rotation: [0, Math.PI / 6, 0],
+    prepGeo(new THREE.CylinderGeometry(0.24, 0.34, 0.84, segs), {
+      rotation: [0, Math.PI / 8, 0],
       position: [0, 0.56, 0],
       flatShaded: true
     })
   );
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.56, 0.36, 0.36), {
+    prepGeo(new THREE.BoxGeometry(0.48, 0.34, 0.34), {
       position: [0, 1.06, 0],
       flatShaded: true
     })
   );
-  // Golden Runic Chest Forge-Core
   goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.11, 0), {
-      position: [0, 1.06, 0.19],
+    prepGeo(new THREE.OctahedronGeometry(0.095, 0), {
+      position: [0, 1.06, 0.18],
       flatShaded: true
     })
   );
 
-  // Towering Fortress Shoulder Pauldrons with Spikes
+  // Heavy Fortress Shoulder Pauldrons (kept below crown deck so Sovereign Crown dominates overhead!)
   for (const side of [-1, 1]) {
     bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.20, 0.28, 0.34), {
-        rotation: [0, 0, side * -0.18],
-        position: [side * 0.32, 1.12, 0],
+      prepGeo(new THREE.BoxGeometry(0.18, 0.24, 0.30), {
+        rotation: [0, 0, side * -0.15],
+        position: [side * 0.28, 1.10, 0],
         flatShaded: true
       })
     );
     goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.055, 0.22, 4), {
-        rotation: [0, Math.PI / 4, side * -0.28],
-        position: [side * 0.36, 1.32, 0],
+      prepGeo(new THREE.BoxGeometry(0.19, 0.04, 0.31), {
+        rotation: [0, 0, side * -0.15],
+        position: [side * 0.28, 1.22, 0],
         flatShaded: true
       })
     );
   }
 
-  // Great Horned Iron-and-Gold War-Emperor Helm & Crown
+  // Dominant Octagonal Forged Sovereign Crown + 4 Orthogonal Cardinal Crown Bastions
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.15, 0.16, 0.26, 6), {
-      rotation: [0, Math.PI / 6, 0],
-      position: [0, 1.35, 0],
+    prepGeo(new THREE.CylinderGeometry(0.192, 0.162, 0.28, 8), {
+      rotation: [0, Math.PI / 8, 0],
+      position: [0, 1.36, 0],
       flatShaded: true
     })
   );
-  // Massive Twin Sovereign War-Horns + Central Runic Cross-Anvil Crest
-  for (const side of [-1, 1]) {
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.195, 0.020, 6, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, 1.50, 0],
+      flatShaded: true
+    })
+  );
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
     goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.055, 0.38, 4), {
-        rotation: [0.15, 0, side * -0.52],
-        position: [side * 0.22, 1.56, 0],
+      prepGeo(new THREE.BoxGeometry(0.082, 0.12, 0.048), {
+        rotation: [0, -a, 0],
+        position: [Math.sin(a) * 0.192, 1.545, Math.cos(a) * 0.192],
         flatShaded: true
       })
     );
   }
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.06, 0.32, 0.06), {
-      position: [0, 1.64, 0],
-      flatShaded: true
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.22, 0.06, 0.06), {
-      position: [0, 1.70, 0],
-      flatShaded: true
-    })
-  );
 
-  // Colossal Broad-Bladed Runic Executioner Greatsword planted in front (z = 0.28)
+  // Broad-Bladed Runic Executioner Greatsword planted in front (z = 0.26)
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.32, 0.05, 0.06), {
-      position: [0, 0.92, 0.28],
+    prepGeo(new THREE.BoxGeometry(0.28, 0.048, 0.055), {
+      position: [0, 0.90, 0.26],
       flatShaded: true
     })
   );
   steelList.push(
-    prepGeo(new THREE.BoxGeometry(0.12, 0.72, 0.035), {
-      position: [0, 0.54, 0.28],
+    prepGeo(new THREE.BoxGeometry(0.11, 0.70, 0.034), {
+      position: [0, 0.53, 0.26],
       flatShaded: true
     })
   );
   goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.035, 0.64, 0.042), {
-      position: [0, 0.56, 0.28]
+    prepGeo(new THREE.BoxGeometry(0.032, 0.62, 0.040), {
+      position: [0, 0.55, 0.26]
     })
   );
+
+  // Top Identifier: Royal Gold Heraldic Cross Pattée + Sovereign Vertical Cross Crest
+  addKingTopCrownCrossEmblem(1.502, 1.06, detail, goldList, steelList, markerList, true);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -1945,10 +2243,10 @@ function addSanctumPedestal(
       position: [0, 0.05, 0]
     })
   );
-  // Signature Levitating Golden Astrolabe Ring hovering in mid-air around the piece!
+  // Signature Levitating Golden Astrolabe Ring hovering subtly around the lower waist (kept compact so overhead silhouettes stay crystal-clear!)
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(ringRadius, 0.020, 8, segs), {
-      rotation: [Math.PI / 2 + 0.22, 0, 0.15],
+    prepGeo(new THREE.TorusGeometry(ringRadius, 0.015, 8, segs), {
+      rotation: [Math.PI / 2 + 0.16, 0, 0.12],
       position: [0, ringHeight, 0]
     })
   );
@@ -1960,80 +2258,65 @@ function buildSanctumPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.34, segs, 0.52, 0.31, bodyList, goldList);
+  addSanctumPedestal(0.33, segs, 0.44, 0.26, bodyList, goldList);
 
-  // Sleek Flared Arcane Acolyte Robe
+  // Sleek Compact Arcane Acolyte Robe & Rounded Hood Cap (shortest piece — no tall cone hat!)
   bodyList.push(
     createSculptedLathe(
       [
-        [0.25, 0.15],
-        [0.18, 0.45],
-        [0.14, 0.72],
-        [0.17, 0.86],
+        [0.24, 0.15],
+        [0.17, 0.44],
+        [0.135, 0.66],
+        [0.165, 0.78],
+        [0.155, 0.85],
+        [0.09, 0.875],
         [0.001, 0.88]
       ],
       segs
     )
   );
-
-  // Wide-Brimmed Pointed Wizard Hat with Curved Apex!
-  bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.26, 0.28, 0.025, segs), {
-      rotation: [-0.12, 0, 0],
-      position: [0, 0.94, 0]
-    })
-  );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.27, 0.014, 8, segs), {
-      rotation: [Math.PI / 2 - 0.12, 0, 0],
-      position: [0, 0.94, 0]
-    })
-  );
-  bodyList.push(
-    prepGeo(new THREE.ConeGeometry(0.14, 0.42, segs), {
-      rotation: [-0.18, 0, 0],
-      position: [0, 1.14, -0.03]
-    })
-  );
-  // Star finial at tip of wizard hat
-  goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.038, 0), {
-      position: [0, 1.35, -0.07]
+    prepGeo(new THREE.TorusGeometry(0.162, 0.013, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 0.77, 0]
     })
   );
 
-  // Right Hand (+X = 0.22): Crystal-Tipped Arcane Wand / Stave
+  // Tucked Low Crystal Wand (+X = 0.18, kept strictly below y = 0.74) & Low Mana Sphere (-X = -0.17)
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.016, 0.018, 0.88, 8), {
-      position: [0.22, 0.56, 0.12]
+    prepGeo(new THREE.CylinderGeometry(0.014, 0.016, 0.56, 8), {
+      position: [0.18, 0.42, 0.10]
     })
   );
   steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.065, 0), {
-      scale: [0.75, 1.45, 0.75],
-      position: [0.22, 1.04, 0.12]
+    prepGeo(new THREE.OctahedronGeometry(0.048, 0), {
+      scale: [0.75, 1.35, 0.75],
+      position: [0.18, 0.72, 0.10]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.SphereGeometry(0.052, 10, 10), {
+      position: [-0.17, 0.62, 0.13]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.082, 0.010, 6, 14), {
+      rotation: [0.8, 0.4, 0],
+      position: [-0.17, 0.62, 0.13]
     })
   );
 
-  // Left Hand (-X = -0.20): Levitating Golden Mana Sphere + Orbiting Ring
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.068, 12, 12), {
-      position: [-0.20, 0.82, 0.16]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.105, 0.012, 8, 16), {
-      rotation: [0.8, 0.4, 0],
-      position: [-0.20, 0.82, 0.16]
-    })
-  );
+  // Top Identifier: Pearl Silver Arcane Sigil Single Dot Medallion
+  addPawnTopDotEmblem(0.876, 0.96, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2043,65 +2326,80 @@ function buildSanctumRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.38, segs, 0.58, 0.35, bodyList, goldList);
+  addSanctumPedestal(0.38, segs, 0.50, 0.30, bodyList, goldList);
 
-  // Second intersecting tilted astrolabe ring for the Obelisk Spire!
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.34, 0.020, 8, segs), {
-      rotation: [Math.PI / 2 - 0.38, 0, -0.35],
-      position: [0, 0.76, 0]
-    })
-  );
-
-  // Tall Tapered 4-Sided Arcane Obelisk Needle Spire
+  // 4-Sided Arcane Sanctum Bastion Tower Core
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.11, 0.25, 0.96, 4), {
+    prepGeo(new THREE.CylinderGeometry(0.24, 0.29, 0.82, 4), {
       rotation: [0, Math.PI / 4, 0],
-      position: [0, 0.62, 0],
+      position: [0, 0.56, 0],
       flatShaded: true
     })
   );
-  // 4 Floating Side Crystal Fins flanking the Obelisk
+  // Subtle Side Crystal Buttress Fins
   for (let i = 0; i < 4; i++) {
     const a = (i * Math.PI) / 2;
-    const fx = Math.cos(a) * 0.23;
-    const fz = Math.sin(a) * 0.23;
-    bodyList.push(
-      prepGeo(new THREE.ConeGeometry(0.055, 0.48, 4), {
-        rotation: [0, -a, 0],
-        position: [fx, 0.48, fz],
-        flatShaded: true
-      })
-    );
+    const fx = Math.cos(a) * 0.21;
+    const fz = Math.sin(a) * 0.21;
     goldList.push(
-      prepGeo(new THREE.BoxGeometry(0.03, 0.52, 0.03), {
-        position: [fx * 0.82, 0.62, fz * 0.82]
+      prepGeo(new THREE.BoxGeometry(0.032, 0.54, 0.032), {
+        position: [fx, 0.58, fz]
       })
     );
   }
 
-  // Pyramidion Obelisk Capstone + Levitating Mana Crystal at the Apex
+  // Broad Square Astral Bastion Parapet Deck (0.48 x 0.48 — bold 90° square fortress top silhouette!)
+  bodyList.push(
+    prepGeo(new THREE.BoxGeometry(0.48, 0.09, 0.48), {
+      position: [0, 1.01, 0],
+      flatShaded: true
+    })
+  );
   goldList.push(
-    prepGeo(new THREE.ConeGeometry(0.155, 0.20, 4), {
-      rotation: [0, Math.PI / 4, 0],
-      position: [0, 1.18, 0],
+    prepGeo(new THREE.BoxGeometry(0.51, 0.028, 0.51), {
+      position: [0, 0.965, 0],
       flatShaded: true
     })
   );
-  steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.11, 0), {
-      scale: [0.8, 1.5, 0.8],
-      position: [0, 1.40, 0],
-      flatShaded: true
-    })
-  );
+
+  // 4 Square Corner Crystal-Capped Merlon Pylons at (±0.178, ±0.178)
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const cx = sx * 0.178;
+      const cz = sz * 0.178;
+      bodyList.push(
+        prepGeo(new THREE.BoxGeometry(0.125, 0.135, 0.125), {
+          position: [cx, 1.115, cz],
+          flatShaded: true
+        })
+      );
+      goldList.push(
+        prepGeo(new THREE.BoxGeometry(0.136, 0.024, 0.136), {
+          position: [cx, 1.185, cz],
+          flatShaded: true
+        })
+      );
+      steelList.push(
+        prepGeo(new THREE.OctahedronGeometry(0.042, 0), {
+          scale: [0.85, 1.15, 0.85],
+          position: [cx, 1.225, cz],
+          flatShaded: true
+        })
+      );
+    }
+  }
+
+  // Top Identifier: Emerald Green Astral Fortress / Castle Tower Emblem on square parapet deck
+  addRookTopFortressEmblem(1.055, 1.0, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2112,57 +2410,88 @@ function buildSanctumKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.37, segs, 0.48, 0.34, bodyList, goldList);
+  addSanctumPedestal(0.37, segs, 0.44, 0.29, bodyList, goldList);
 
-  // Graceful Astral Unicorn / Pegasus Spirit-Steed Neck & Head
+  // Graceful Prominent Astral Steed / Unicorn Neck, Broad Poll & Forward-Projecting Snout (+Z)
   const unicornSpine = [
-    { y: 0.16, z: -0.02, rx: 0.22, rz: 0.22, pitch: 0 },
-    { y: 0.46, z: 0.05, rx: 0.16, rz: 0.18, pitch: -0.18 },
-    { y: 0.78, z: 0.12, rx: 0.12, rz: 0.15, pitch: 0.1 },
-    { y: 0.98, z: 0.16, rx: 0.10, rz: 0.13, pitch: 0.55 },
-    { y: 0.92, z: 0.30, rx: 0.065, rz: 0.08, pitch: 1.25 }
+    { y: 0.16, z: -0.02, rx: 0.23, rz: 0.23, pitch: 0 },
+    { y: 0.46, z: 0.03, rx: 0.17, rz: 0.19, pitch: -0.14 },
+    { y: 0.78, z: 0.06, rx: 0.145, rz: 0.175, pitch: 0.08 },
+    { y: 1.03, z: 0.07, rx: 0.138, rz: 0.165, pitch: 0.36 },
+    { y: 0.96, z: 0.22, rx: 0.105, rz: 0.125, pitch: 0.92 },
+    { y: 0.88, z: 0.36, rx: 0.072, rz: 0.085, pitch: 1.28 }
   ];
   bodyList.push(createLoftedOrganicMesh(unicornSpine, ringSegs));
 
-  // Long Spiraled Golden Unicorn Horn projecting from the steed's brow!
+  // Spiraled Golden Unicorn Horn projecting forward from the steed's brow (+Z)
   goldList.push(
-    prepGeo(new THREE.ConeGeometry(0.038, 0.38, 8), {
-      rotation: [0.74, 0, 0],
-      position: [0, 1.14, 0.27]
+    prepGeo(new THREE.ConeGeometry(0.032, 0.26, 8), {
+      rotation: [0.95, 0, 0],
+      position: [0, 1.07, 0.26]
+    })
+  );
+  // Ember Red Astral Nasal Crest along snout bridge
+  markerList.push(
+    prepGeo(new THREE.BoxGeometry(0.038, 0.028, 0.18), {
+      rotation: [0.38, 0, 0],
+      position: [0, 1.01, 0.22],
+      flatShaded: true
     })
   );
 
-  // Swept-Back Ethereal Pegasus Wing-Blades on Left & Right Flanks!
+  // Alert Sculpted Astral Steed Ears & Flowing Crystalline Mane (-Z)
   for (const side of [-1, 1]) {
-    for (let f = 0; f < 3; f++) {
-      const len = 0.54 - f * 0.10;
-      const wy = 0.78 + f * 0.13;
-      const wz = -0.06 - f * 0.06;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.038, 0.15, 6), {
+        rotation: [-0.22, 0, side * -0.18],
+        position: [side * 0.082, 1.15, -0.01]
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.SphereGeometry(0.018, 8, 8), {
+        position: [side * 0.108, 1.00, 0.14]
+      })
+    );
+  }
+  for (let m = 0; m < 5; m++) {
+    const t = m / 4;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.052, 0.16, 4), {
+        rotation: [-0.85, 0, 0],
+        position: [0, 0.56 + t * 0.48, -0.14 - Math.sin(t * Math.PI) * 0.05],
+        flatShaded: true
+      })
+    );
+  }
+
+  // Compact Swept-Back Ethereal Flank Wing-Blades (tucked low at y <= 0.72 so horse head dominates overhead!)
+  for (const side of [-1, 1]) {
+    for (let f = 0; f < 2; f++) {
+      const len = 0.36 - f * 0.08;
+      const wy = 0.56 + f * 0.11;
+      const wz = -0.05 - f * 0.05;
       bodyList.push(
-        prepGeo(new THREE.ConeGeometry(0.065, len, 4), {
-          scale: [0.35, 1.0, 1.1],
-          rotation: [-0.68 - f * 0.15, side * 0.28, side * -0.35],
-          position: [side * 0.22, wy, wz],
-          flatShaded: true
-        })
-      );
-      goldList.push(
-        prepGeo(new THREE.ConeGeometry(0.035, len * 0.9, 4), {
-          scale: [0.35, 1.0, 1.1],
-          rotation: [-0.68 - f * 0.15, side * 0.28, side * -0.35],
-          position: [side * 0.24, wy + 0.02, wz],
+        prepGeo(new THREE.ConeGeometry(0.048, len, 4), {
+          scale: [0.35, 1.0, 1.0],
+          rotation: [-0.75 - f * 0.15, side * 0.22, side * -0.28],
+          position: [side * 0.19, wy, wz],
           flatShaded: true
         })
       );
     }
   }
 
+  // Top Identifier: Ember Red Stylized Horse-Head Crest on upper steed poll
+  addKnightTopHorseEmblem(1.11, 0.05, 0.94, 0.06, detail, goldList, markerList);
+
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2172,72 +2501,88 @@ function buildSanctumBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.36, segs, 0.56, 0.33, bodyList, goldList);
+  addSanctumPedestal(0.36, segs, 0.50, 0.28, bodyList, goldList);
 
   // Slender Sweeping Astral Seer Vestments
   bodyList.push(
     createSculptedLathe(
       [
         [0.27, 0.15],
-        [0.20, 0.48],
-        [0.15, 0.82],
-        [0.18, 1.02],
-        [0.11, 1.12],
-        [0.001, 1.14]
+        [0.19, 0.48],
+        [0.145, 0.80],
+        [0.175, 1.00],
+        [0.125, 1.10],
+        [0.001, 1.12]
       ],
       segs
     )
   );
 
-  // Vertical Floating Golden Halo Ring behind the Seer's shoulders & head
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.24, 0.018, 8, segs), {
-      position: [0, 1.18, -0.06]
-    })
-  );
-
-  // Seer Head + Tall Crescent-Moon Headdress cradling a Levitating Star-Orb
+  // Seer Head + Physically Divided Twin-Crystal Pointed Mitre Spire (unmistakable split mitre cleft!)
   faceList.push(
-    prepGeo(new THREE.SphereGeometry(0.105, 14, 12), {
-      position: [0, 1.22, 0]
+    prepGeo(new THREE.SphereGeometry(0.102, 14, 12), {
+      position: [0, 1.16, 0]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.145, 0.024, 8, 20, Math.PI * 1.35), {
-      rotation: [0, 0, Math.PI * 0.82],
-      position: [0, 1.42, 0]
+    prepGeo(new THREE.TorusGeometry(0.135, 0.016, 8, segs), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.19, 0]
     })
   );
-  steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.065, 0), {
-      position: [0, 1.44, 0]
+  for (const side of [-1, 1]) {
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.088, 0.27, 4), {
+        scale: [0.85, 1.0, 1.25],
+        rotation: [0, Math.PI / 4, side * -0.24],
+        position: [side * 0.082, 1.29, 0],
+        flatShaded: true
+      })
+    );
+    goldList.push(
+      prepGeo(new THREE.ConeGeometry(0.042, 0.25, 4), {
+        rotation: [0, Math.PI / 4, side * -0.24],
+        position: [side * 0.115, 1.29, 0],
+        flatShaded: true
+      })
+    );
+  }
+  // Closed crystal mitre cradle underneath the diamond emblem
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.115, 0.125, 0.08, 8), {
+      position: [0, 1.24, 0]
     })
   );
 
-  // Right Hand (+X = 0.23): Tall Crescent-Moon & Star Staff
+  // Tucked Crescent-Moon Staff (+X = 0.20, kept below y = 1.08 so split crystal mitre dominates overhead!)
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.018, 0.020, 1.28, 8), {
-      position: [0.23, 0.78, 0.10]
+    prepGeo(new THREE.CylinderGeometry(0.016, 0.018, 0.88, 8), {
+      position: [0.20, 0.58, 0.10]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.11, 0.022, 8, 18, Math.PI * 1.4), {
+    prepGeo(new THREE.TorusGeometry(0.072, 0.015, 8, 16, Math.PI * 1.4), {
       rotation: [0, Math.PI / 2, Math.PI * 0.3],
-      position: [0.23, 1.48, 0.10]
+      position: [0.20, 1.05, 0.10]
     })
   );
   steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.048, 0), {
-      position: [0.23, 1.48, 0.10]
+    prepGeo(new THREE.OctahedronGeometry(0.036, 0), {
+      position: [0.20, 1.05, 0.10]
     })
   );
+
+  // Top Identifier: Arcane Cyan Sacred 4-Point Diamond nestled inside the twin-crystal cleft
+  addBishopTopDiamondEmblem(1.28, 1.02, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2247,75 +2592,97 @@ function buildSanctumQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.38, segs, 0.62, 0.36, bodyList, goldList);
+  addSanctumPedestal(0.38, segs, 0.54, 0.30, bodyList, goldList);
 
   // High-Collared Flowing Celestial Arch-Sorceress Gown
   bodyList.push(
     createSculptedLathe(
       [
         [0.29, 0.15],
-        [0.22, 0.52],
-        [0.16, 0.86],
-        [0.20, 1.10],
-        [0.12, 1.18],
+        [0.21, 0.52],
+        [0.155, 0.86],
+        [0.195, 1.10],
+        [0.13, 1.18],
         [0.001, 1.20]
       ],
       segs
     )
   );
-
-  // Floating Golden Crescent Shoulder-Mantle Arcs & High flared collar
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.28, 0.022, 8, 22, Math.PI * 1.2), {
+    prepGeo(new THREE.TorusGeometry(0.22, 0.018, 8, 20, Math.PI * 1.2), {
       rotation: [-0.35, 0, -Math.PI * 0.1],
-      position: [0, 1.16, -0.04]
+      position: [0, 1.12, -0.03]
     })
   );
 
-  // Sorceress Head + Radiant Sunburst & Crescent Diadem Crown
+  // Sorceress Head + Wide Flared 8-Rayed Astral Sunburst Coronet around Open Faction Crown Dish!
   faceList.push(
-    prepGeo(new THREE.SphereGeometry(0.11, 14, 12), {
-      position: [0, 1.28, 0]
+    prepGeo(new THREE.SphereGeometry(0.108, 14, 12), {
+      position: [0, 1.25, 0]
     })
   );
-  // 7 Radiant Sunburst Rays fanning out above the brow
-  for (let i = -3; i <= 3; i++) {
-    const a = i * 0.28;
-    const len = 0.26 - Math.abs(i) * 0.03;
+  bodyList.push(
+    prepGeo(new THREE.CylinderGeometry(0.178, 0.132, 0.085, 16), {
+      position: [0, 1.345, 0]
+    })
+  );
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.180, 0.016, 8, 24), {
+      rotation: [Math.PI / 2, 0, 0],
+      position: [0, 1.385, 0]
+    })
+  );
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI * 2) / 8;
+    const tilt = 0.54;
+    const r = 0.192;
+    bodyList.push(
+      prepGeo(new THREE.ConeGeometry(0.038, 0.145, 4), {
+        rotation: [Math.cos(a) * tilt, a, -Math.sin(a) * tilt],
+        position: [Math.sin(a) * r, 1.435, Math.cos(a) * r],
+        flatShaded: true
+      })
+    );
     goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.022, len, 4), {
-        rotation: [0, 0, -a],
-        position: [Math.sin(a) * 0.16, 1.46 + Math.cos(a) * 0.06, 0.02]
+      prepGeo(new THREE.ConeGeometry(0.024, 0.16, 4), {
+        rotation: [Math.cos(a) * tilt, a, -Math.sin(a) * tilt],
+        position: [Math.sin(a) * (r + 0.014), 1.448, Math.cos(a) * (r + 0.014)],
+        flatShaded: true
       })
     );
   }
 
-  // Right Hand (+X = 0.25): Twin-Ringed Astral Armillary Scepter
+  // Tucked Astral Armillary Scepter (+X = 0.21, kept below y = 1.15)
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.018, 0.020, 1.38, 8), {
-      position: [0.25, 0.84, 0.10]
+    prepGeo(new THREE.CylinderGeometry(0.016, 0.018, 0.94, 8), {
+      position: [0.21, 0.62, 0.10]
     })
   );
   for (const rotZ of [0.45, -0.45]) {
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(0.10, 0.016, 8, 18), {
+      prepGeo(new THREE.TorusGeometry(0.068, 0.012, 8, 16), {
         rotation: [0.3, 0.4, rotZ],
-        position: [0.25, 1.56, 0.10]
+        position: [0.21, 1.12, 0.10]
       })
     );
   }
   steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.055, 0), {
-      position: [0.25, 1.56, 0.10]
+    prepGeo(new THREE.OctahedronGeometry(0.038, 0), {
+      position: [0.21, 1.12, 0.10]
     })
   );
+
+  // Top Identifier: Amethyst Purple Eight-Pointed Star in center of astral coronet
+  addQueenTopEightPointStarEmblem(1.388, 1.04, detail, goldList, markerList);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2325,8 +2692,9 @@ function buildSanctumKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
-  addSanctumPedestal(0.41, segs, 0.66, 0.39, bodyList, goldList);
+  addSanctumPedestal(0.41, segs, 0.56, 0.32, bodyList, goldList);
 
   // Grand Archmage Hierophant Spire Vestments
   bodyList.push(
@@ -2336,82 +2704,67 @@ function buildSanctumKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.25, 0.56],
         [0.19, 0.92],
         [0.24, 1.18],
-        [0.15, 1.26],
+        [0.16, 1.26],
         [0.001, 1.28]
       ],
       segs
     )
   );
 
-  // Giant Vertical Astrolabe Halo Ring + 4 Cardinal Star Spikes behind the Archmage King!
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.34, 0.024, 8, segs), {
-      position: [0, 1.28, -0.08]
-    })
-  );
-  for (let i = 0; i < 8; i++) {
-    const a = (i * Math.PI * 2) / 8;
-    goldList.push(
-      prepGeo(new THREE.ConeGeometry(0.025, 0.14, 4), {
-        rotation: [0, 0, -a + Math.PI / 2],
-        position: [Math.cos(a) * 0.40, 1.28 + Math.sin(a) * 0.40, -0.08]
-      })
-    );
-  }
-
-  // Archmage Head + Towering Triple-Tiered Astral Spire Crown
+  // Archmage Head + Dominant Octagonal 4-Arch Astral Sovereign Crown (faction body crown + 4 cardinal bastions!)
   faceList.push(
-    prepGeo(new THREE.CylinderGeometry(0.115, 0.11, 0.20, 16), {
+    prepGeo(new THREE.CylinderGeometry(0.122, 0.118, 0.20, 16), {
       position: [0, 1.35, 0]
     })
   );
   bodyList.push(
-    prepGeo(new THREE.ConeGeometry(0.15, 0.48, 8), {
-      position: [0, 1.62, 0]
+    prepGeo(new THREE.CylinderGeometry(0.188, 0.155, 0.12, 8), {
+      rotation: [0, Math.PI / 8, 0],
+      position: [0, 1.46, 0]
     })
   );
-  for (const [cy, cr] of [
-    [1.44, 0.15],
-    [1.58, 0.115],
-    [1.72, 0.075]
-  ]) {
+  goldList.push(
+    prepGeo(new THREE.TorusGeometry(0.190, 0.018, 8, 8), {
+      rotation: [Math.PI / 2, 0, Math.PI / 8],
+      position: [0, 1.52, 0]
+    })
+  );
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
     goldList.push(
-      prepGeo(new THREE.TorusGeometry(cr, 0.018, 8, 18), {
-        rotation: [Math.PI / 2, 0, 0],
-        position: [0, cy, 0]
+      prepGeo(new THREE.BoxGeometry(0.075, 0.115, 0.044), {
+        rotation: [0, -a, 0],
+        position: [Math.sin(a) * 0.188, 1.558, Math.cos(a) * 0.188]
       })
     );
   }
-  // Levitating Astral Cross-Star Finial at Crown Apex
-  goldList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.065, 0), {
-      scale: [1.0, 1.6, 1.0],
-      position: [0, 1.92, 0]
-    })
-  );
 
-  // Staff of the Cosmos held in front (+Z = 0.26)
+  // Tucked Staff of the Cosmos held in front (+Z = 0.24, top <= 1.14 so Sovereign Crown is 100% unobstructed!)
   goldList.push(
-    prepGeo(new THREE.CylinderGeometry(0.022, 0.024, 1.48, 8), {
-      position: [0, 0.82, 0.26]
+    prepGeo(new THREE.CylinderGeometry(0.020, 0.022, 0.96, 8), {
+      position: [0, 0.58, 0.24]
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.12, 0.018, 8, 20), {
-      position: [0, 1.56, 0.26]
+    prepGeo(new THREE.TorusGeometry(0.078, 0.014, 8, 18), {
+      position: [0, 1.10, 0.24]
     })
   );
   steelList.push(
-    prepGeo(new THREE.OctahedronGeometry(0.065, 0), {
-      position: [0, 1.56, 0.26]
+    prepGeo(new THREE.OctahedronGeometry(0.045, 0), {
+      position: [0, 1.10, 0.24]
     })
   );
+
+  // Top Identifier: Royal Gold Heraldic Cross Pattée + Sovereign Vertical Cross Crest
+  addKingTopCrownCrossEmblem(1.52, 1.06, detail, goldList, steelList, markerList, true);
 
   return {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2473,6 +2826,7 @@ function buildClassicPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 0.88);
 
@@ -2498,12 +2852,16 @@ function buildClassicPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
       position: [0, 0.688, 0]
     })
   );
-  // Classic spherical Pawn head
+  // Classic spherical Pawn head (subtly flattened at upper pole for clean flush enamel inlay)
   bodyList.push(
     prepGeo(new THREE.SphereGeometry(0.162, segs, Math.max(12, Math.floor(segs * 0.7))), {
-      position: [0, 0.855, 0]
+      scale: [1.0, 0.96, 1.0],
+      position: [0, 0.852, 0]
     })
   );
+
+  // Restrained Top Inlay: Pearl Silver flush medallion at Pawn pole
+  addPawnTopDotEmblem(1.002, 0.90, detail, goldList, markerList, true);
 
   // Minimal hidden anchors for steel/face so multi-material pipeline stays uniform
   steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
@@ -2513,7 +2871,8 @@ function buildClassicPawnGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2523,10 +2882,11 @@ function buildClassicRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 0.98);
 
-  // Classic tapered Staunton tower column and flared turret cornice
+  // Classic tapered Staunton tower column flaring into a flat recessed turret deck (y = 1.015)
   bodyList.push(
     makeLathe(
       [
@@ -2535,33 +2895,33 @@ function buildClassicRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.175, 0.68],
         [0.17, 0.82],
         [0.225, 0.88],
-        [0.235, 0.94],
-        [0.235, 1.04],
-        [0.165, 1.04],
-        [0.165, 0.96],
-        [0.001, 0.96]
+        [0.238, 0.94],
+        [0.238, 1.015],
+        [0.001, 1.015]
       ],
       segs
     )
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.228, 0.012, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.228, 0.011, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
       position: [0, 0.90, 0]
     })
   );
 
-  // 6 classic rectangular battlement merlons around the turret rim
-  const merlonCount = 6;
-  for (let i = 0; i < merlonCount; i++) {
-    const angle = (i * Math.PI * 2) / merlonCount;
-    bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.11, 0.13, 0.065), {
-        rotation: [0, -angle, 0],
-        position: [Math.sin(angle) * 0.198, 1.09, Math.cos(angle) * 0.198]
-      })
-    );
+  // 4 Broad Championship Staunton Castellated Corner Battlements (4-merlon Staunton turret silhouette!)
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      bodyList.push(
+        prepGeo(new THREE.BoxGeometry(0.118, 0.125, 0.118), {
+          position: [sx * 0.138, 1.072, sz * 0.138]
+        })
+      );
+    }
   }
+
+  // Restrained Top Inlay: Emerald Green Fortress / Tower Inlay flush-set into the turret deck
+  addRookTopFortressEmblem(1.016, 0.84, detail, goldList, markerList, true);
 
   steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
   faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
@@ -2570,7 +2930,8 @@ function buildClassicRookGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2580,6 +2941,7 @@ function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 0.98);
 
@@ -2603,7 +2965,7 @@ function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
     { pos: [0, 0.65, 0.02], rx: 0.145, ry: 0.14, rz: 0.175 },
     { pos: [0, 0.78, 0.01], rx: 0.135, ry: 0.135, rz: 0.168 },
     { pos: [0, 0.91, -0.01], rx: 0.128, ry: 0.13, rz: 0.16 },
-    { pos: [0, 1.02, 0.02], rx: 0.12, ry: 0.12, rz: 0.155 }
+    { pos: [0, 1.01, 0.02], rx: 0.122, ry: 0.105, rz: 0.155 }
   ];
   for (const s of neckSegments) {
     bodyList.push(
@@ -2617,44 +2979,44 @@ function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   // Sculpted Horse Forehead, Bridge of Nose, and Tapered Muzzle (+Z forward, strictly within z <= 0.32)
   bodyList.push(
     prepGeo(new THREE.SphereGeometry(1.0, 16, 12), {
-      scale: [0.115, 0.11, 0.165],
+      scale: [0.115, 0.105, 0.165],
       rotation: [0.42, 0, 0],
-      position: [0, 0.98, 0.11]
+      position: [0, 0.97, 0.11]
     })
   );
   bodyList.push(
-    prepGeo(new THREE.CylinderGeometry(0.068, 0.098, 0.24, 14), {
-      rotation: [Math.PI * 0.36, 0, 0],
-      position: [0, 0.91, 0.19]
+    prepGeo(new THREE.CylinderGeometry(0.068, 0.098, 0.25, 14), {
+      rotation: [Math.PI * 0.38, 0, 0],
+      position: [0, 0.90, 0.20]
     })
   );
   // Sculpted Snout & Nostrils
   bodyList.push(
     prepGeo(new THREE.SphereGeometry(0.072, 14, 10), {
-      scale: [1.05, 0.88, 1.1],
-      position: [0, 0.855, 0.27]
+      scale: [1.05, 0.88, 1.12],
+      position: [0, 0.845, 0.285]
     })
   );
   // Lower Jaw / Cheekbone definition
   bodyList.push(
     prepGeo(new THREE.SphereGeometry(0.095, 14, 10), {
       scale: [1.12, 0.75, 1.0],
-      position: [0, 0.91, 0.06]
+      position: [0, 0.90, 0.06]
     })
   );
 
-  // Twin Alert Pointed Horse Ears at Crown
+  // Twin Alert Pointed Horse Ears flanking the upper poll inlay
   for (const side of [-1, 1]) {
     bodyList.push(
-      prepGeo(new THREE.ConeGeometry(0.036, 0.13, 8), {
-        rotation: [-0.18, 0, side * -0.15],
-        position: [side * 0.065, 1.15, -0.01]
+      prepGeo(new THREE.ConeGeometry(0.035, 0.13, 8), {
+        rotation: [-0.18, 0, side * -0.18],
+        position: [side * 0.092, 1.155, -0.02]
       })
     );
-    // Subtle gold eye accent
+    // Subtle brass eye accent
     goldList.push(
-      prepGeo(new THREE.SphereGeometry(0.018, 8, 8), {
-        position: [side * 0.098, 0.985, 0.11]
+      prepGeo(new THREE.SphereGeometry(0.017, 8, 8), {
+        position: [side * 0.098, 0.975, 0.11]
       })
     );
   }
@@ -2662,15 +3024,18 @@ function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
   // Classic Carved Flowing Mane along the back spine (-Z)
   for (let m = 0; m < 7; m++) {
     const t = m / 6;
-    const my = 0.42 + t * 0.64;
-    const mz = -0.14 - Math.sin(t * Math.PI) * 0.045;
+    const my = 0.42 + t * 0.62;
+    const mz = -0.14 - Math.sin(t * Math.PI) * 0.048;
     bodyList.push(
-      prepGeo(new THREE.BoxGeometry(0.055, 0.11, 0.085), {
+      prepGeo(new THREE.BoxGeometry(0.055, 0.11, 0.088), {
         rotation: [0.25 - t * 0.35, 0, 0],
         position: [0, my, mz]
       })
     );
   }
+
+  // Restrained Top Inlay: Ember Red Horse-Head Crest cleanly set onto the upper crown poll between the ears (zero overlap!)
+  addKnightTopHorseEmblem(1.112, 0.02, 0.76, 0.05, detail, goldList, markerList, true);
 
   steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
   faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
@@ -2679,7 +3044,8 @@ function buildClassicKnightGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2689,10 +3055,11 @@ function buildClassicBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 0.98);
 
-  // Slender turned Staunton column, collar rings, and ovoid mitre head
+  // Slender turned Staunton column, collar rings, and lower ovoid mitre cup
   bodyList.push(
     makeLathe(
       [
@@ -2703,11 +3070,11 @@ function buildClassicBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.185, 0.82],
         [0.19, 0.85],
         [0.135, 0.88],
-        [0.165, 0.94],
-        [0.19, 1.05],
-        [0.165, 1.17],
-        [0.095, 1.26],
-        [0.001, 1.29]
+        [0.168, 0.95],
+        [0.188, 1.05],
+        [0.162, 1.15],
+        [0.115, 1.22],
+        [0.001, 1.23]
       ],
       segs
     )
@@ -2718,24 +3085,31 @@ function buildClassicBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
       position: [0, 0.835, 0]
     })
   );
-  // Characteristic Staunton Bishop mitre diagonal band & top ball finial
-  goldList.push(
-    prepGeo(new THREE.BoxGeometry(0.22, 0.022, 0.14), {
-      rotation: [0.55, 0, 0],
-      position: [0, 1.12, 0.095]
+
+  // Authentic Slotted Staunton Mitre Upper Lobes (creating the classic angled Bishop cleft!)
+  bodyList.push(
+    prepGeo(new THREE.ConeGeometry(0.088, 0.13, 12), {
+      scale: [1.05, 1.0, 0.72],
+      rotation: [-0.14, 0, 0],
+      position: [0, 1.265, -0.042]
     })
   );
   bodyList.push(
-    prepGeo(new THREE.SphereGeometry(0.052, 14, 12), {
-      position: [0, 1.325, 0]
+    prepGeo(new THREE.ConeGeometry(0.076, 0.10, 12), {
+      scale: [1.02, 1.0, 0.68],
+      rotation: [0.22, 0, 0],
+      position: [0, 1.245, 0.052]
     })
   );
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.042, 0.008, 8, 16), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.28, 0]
+  // Classic small Staunton mitre finial pearl perched on the rear mitre peak
+  bodyList.push(
+    prepGeo(new THREE.SphereGeometry(0.036, 12, 10), {
+      position: [0, 1.335, -0.052]
     })
   );
+
+  // Restrained Top Inlay: Arcane Cyan Sacred Diamond flush-set into the slotted Staunton mitre crown
+  addBishopTopDiamondEmblem(1.235, 0.78, detail, goldList, markerList, true);
 
   steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
   faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
@@ -2744,7 +3118,8 @@ function buildClassicBishopGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2754,6 +3129,7 @@ function buildClassicQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 1.05);
 
@@ -2770,10 +3146,10 @@ function buildClassicQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.155, 1.07],
         [0.185, 1.11],
         [0.16, 1.14],
-        [0.215, 1.32],
-        [0.155, 1.38],
-        [0.09, 1.42],
-        [0.001, 1.43]
+        [0.218, 1.33],
+        [0.165, 1.39],
+        [0.115, 1.415],
+        [0.001, 1.418]
       ],
       segs
     )
@@ -2785,34 +3161,26 @@ function buildClassicQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
     })
   );
 
-  // 9 classic Staunton coronet pearls/points around the Queen's crown rim
-  const crownPoints = 9;
+  // 8 Classic Scalloped Staunton Coronet Points & Pearls flaring subtly outward around the Queen's crown rim
+  const crownPoints = 8;
   for (let i = 0; i < crownPoints; i++) {
     const angle = (i * Math.PI * 2) / crownPoints;
+    const tilt = 0.24;
     bodyList.push(
-      prepGeo(new THREE.ConeGeometry(0.034, 0.095, 8), {
-        position: [Math.sin(angle) * 0.195, 1.38, Math.cos(angle) * 0.195]
+      prepGeo(new THREE.ConeGeometry(0.036, 0.10, 8), {
+        rotation: [Math.cos(angle) * tilt, angle, -Math.sin(angle) * tilt],
+        position: [Math.sin(angle) * 0.202, 1.385, Math.cos(angle) * 0.202]
       })
     );
     goldList.push(
-      prepGeo(new THREE.SphereGeometry(0.02, 8, 8), {
-        position: [Math.sin(angle) * 0.195, 1.43, Math.cos(angle) * 0.195]
+      prepGeo(new THREE.SphereGeometry(0.019, 8, 8), {
+        position: [Math.sin(angle) * 0.214, 1.438, Math.cos(angle) * 0.214]
       })
     );
   }
 
-  // Classic spherical globe finial atop the Queen's cushion dome
-  bodyList.push(
-    prepGeo(new THREE.SphereGeometry(0.056, 14, 12), {
-      position: [0, 1.475, 0]
-    })
-  );
-  goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.046, 0.009, 8, 16), {
-      rotation: [Math.PI / 2, 0, 0],
-      position: [0, 1.428, 0]
-    })
-  );
+  // Restrained Top Inlay: Amethyst Purple Eight-Pointed Star flush-set into the Queen's cushion dome
+  addQueenTopEightPointStarEmblem(1.416, 0.88, detail, goldList, markerList, true);
 
   steelList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
   faceList.push(prepGeo(new THREE.BoxGeometry(0.01, 0.01, 0.01), { position: [0, 0.1, 0] }));
@@ -2821,7 +3189,8 @@ function buildClassicQueenGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 
@@ -2831,6 +3200,7 @@ function buildClassicKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
   const goldList: THREE.BufferGeometry[] = [];
   const steelList: THREE.BufferGeometry[] = [];
   const faceList: THREE.BufferGeometry[] = [];
+  const markerList: THREE.BufferGeometry[] = [];
 
   addClassicStauntonBase(bodyList, goldList, segs, 1.1);
 
@@ -2847,10 +3217,10 @@ function buildClassicKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
         [0.17, 1.17],
         [0.205, 1.21],
         [0.165, 1.25],
-        [0.23, 1.46],
+        [0.232, 1.46],
         [0.195, 1.53],
-        [0.11, 1.57],
-        [0.001, 1.58]
+        [0.135, 1.56],
+        [0.001, 1.562]
       ],
       segs
     )
@@ -2862,26 +3232,36 @@ function buildClassicKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
     })
   );
   goldList.push(
-    prepGeo(new THREE.TorusGeometry(0.222, 0.012, 8, segs), {
+    prepGeo(new THREE.TorusGeometry(0.225, 0.012, 8, segs), {
       rotation: [Math.PI / 2, 0, 0],
       position: [0, 1.46, 0]
     })
   );
 
-  // Iconic Staunton Cross Pattée Finial at the King's Apex (y = 1.57..1.80)
+  // Iconic Traditional Vertical Staunton Cross Pattée Finial at the King's Apex (y = 1.56..1.78)
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.058, 0.22, 0.048), {
-      position: [0, 1.68, 0]
+    prepGeo(new THREE.BoxGeometry(0.056, 0.22, 0.052), {
+      position: [0, 1.67, 0]
     })
   );
   bodyList.push(
-    prepGeo(new THREE.BoxGeometry(0.175, 0.058, 0.048), {
-      position: [0, 1.69, 0]
+    prepGeo(new THREE.BoxGeometry(0.172, 0.056, 0.052), {
+      position: [0, 1.685, 0]
     })
   );
-  goldList.push(
-    prepGeo(new THREE.SphereGeometry(0.028, 10, 10), {
-      position: [0, 1.69, 0]
+
+  // Restrained Top Inlay: Royal Gold Cross Pattée inset on the crown cushion + flush gold inlay on the vertical Cross crest
+  addKingTopCrownCrossEmblem(1.562, 0.92, detail, goldList, steelList, markerList, false, true);
+  markerList.push(
+    prepGeo(new THREE.BoxGeometry(0.174, 0.014, 0.054), {
+      position: [0, 1.716, 0],
+      flatShaded: true
+    })
+  );
+  markerList.push(
+    prepGeo(new THREE.BoxGeometry(0.058, 0.016, 0.054), {
+      position: [0, 1.782, 0],
+      flatShaded: true
     })
   );
 
@@ -2892,7 +3272,8 @@ function buildClassicKingGeometry(detail: PieceDetailLevel): PieceMeshParts {
     body: finalizeMerged(bodyList),
     gold: finalizeMerged(goldList),
     steel: finalizeMerged(steelList),
-    face: finalizeMerged(faceList)
+    face: finalizeMerged(faceList),
+    marker: finalizeMerged(markerList)
   };
 }
 

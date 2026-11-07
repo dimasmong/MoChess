@@ -512,6 +512,7 @@ export class UIManager {
     setText('label-setting-camsens', t.settingCamSensitivity);
     setText('label-setting-fx', t.settingMagicalFx);
     setText('label-setting-motion', t.settingReducedMotion);
+    setText('label-setting-markers', t.settingPieceMarkers);
     setText('label-setting-coords', t.settingShowCoords);
     setText('btn-settings-done', t.btnDone);
 
@@ -1406,6 +1407,15 @@ export class UIManager {
     motionToggle?.addEventListener('change', () => {
       this.scene.updateSettings({ reducedMotion: motionToggle.checked });
     });
+
+    const markersToggle = document.getElementById('toggle-piece-markers') as HTMLInputElement | null;
+    if (markersToggle) {
+      markersToggle.checked = this.scene.getSettings().pieceMarkers;
+      markersToggle.addEventListener('change', () => {
+        soundManager.playSelect();
+        this.scene.updateSettings({ pieceMarkers: markersToggle.checked });
+      });
+    }
 
     const coordsToggle = document.getElementById('toggle-coords') as HTMLInputElement;
     coordsToggle?.addEventListener('change', () => {

@@ -13,6 +13,24 @@ const SYMBOL_TO_GLB_NAME: Record<PieceSymbol, string> = {
   k: 'king'
 };
 
+export const ROLE_ACCENT_HEX: Record<PieceSymbol, string> = {
+  k: '#f6c138', // Royal Gold — Crown / Heraldic Cross
+  q: '#9b3dff', // Amethyst Purple — Eight-Pointed Star
+  b: '#14ccf5', // Arcane Cyan — Sacred 4-Point Diamond
+  n: '#eb3434', // Ember Red — Stylized Horse-Head Crest
+  r: '#18c668', // Emerald Green — Fortress / Castle Tower
+  p: '#c6daf0'  // Pearl Silver — Single Dot Medallion
+};
+
+const CLASSIC_INLAY_HEX: Record<PieceSymbol, string> = {
+  k: '#e3ac28',
+  q: '#8232d8',
+  b: '#15a8cc',
+  n: '#cc2e2e',
+  r: '#179e54',
+  p: '#b8ccdf'
+};
+
 export interface FactionMaterialSet {
   body: THREE.MeshPhysicalMaterial;
   gold: THREE.MeshStandardMaterial;
@@ -39,6 +57,9 @@ export class PieceAssetManager {
   private hitboxMat: THREE.MeshBasicMaterial;
   private glbLoaded = false;
   private materials: Record<Color, FactionMaterialSet>;
+  private roleMarkerMaterials: Record<PieceSymbol, THREE.MeshStandardMaterial>;
+  private pieceMarkersVisible = true;
+  private markerMeshes = new Set<THREE.Mesh>();
   private contactShadowGeo: THREE.RingGeometry;
   private contactShadowMat: THREE.MeshBasicMaterial;
   private idleClip: THREE.AnimationClip;
@@ -119,6 +140,45 @@ export class PieceAssetManager {
       }
     };
 
+    this.roleMarkerMaterials = {
+      k: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerKingGold',
+        color: new THREE.Color(ROLE_ACCENT_HEX.k),
+        roughness: 0.20,
+        metalness: 0.32
+      }),
+      q: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerQueenAmethyst',
+        color: new THREE.Color(ROLE_ACCENT_HEX.q),
+        roughness: 0.20,
+        metalness: 0.28
+      }),
+      b: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerBishopCyan',
+        color: new THREE.Color(ROLE_ACCENT_HEX.b),
+        roughness: 0.20,
+        metalness: 0.26
+      }),
+      n: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerKnightRed',
+        color: new THREE.Color(ROLE_ACCENT_HEX.n),
+        roughness: 0.22,
+        metalness: 0.28
+      }),
+      r: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerRookEmerald',
+        color: new THREE.Color(ROLE_ACCENT_HEX.r),
+        roughness: 0.20,
+        metalness: 0.28
+      }),
+      p: new THREE.MeshStandardMaterial({
+        name: 'RoleMarkerPawnSilver',
+        color: new THREE.Color(ROLE_ACCENT_HEX.p),
+        roughness: 0.22,
+        metalness: 0.36
+      })
+    };
+
     this.contactShadowGeo = new THREE.RingGeometry(0.01, 0.36, 24);
     this.contactShadowGeo.rotateX(-Math.PI / 2);
     this.contactShadowMat = new THREE.MeshBasicMaterial({
@@ -171,6 +231,25 @@ export class PieceAssetManager {
     this.quality = quality;
     this.texSize = getAdaptiveTextureSize(quality, this.isMobile);
     this.syncMaterialQualityAndSkin();
+  }
+
+  public setPieceMarkersVisible(visible: boolean): void {
+    this.pieceMarkersVisible = visible;
+    for (const mesh of this.markerMeshes) {
+      mesh.visible = visible;
+    }
+  }
+
+  public arePieceMarkersVisible(): boolean {
+    return this.pieceMarkersVisible;
+  }
+
+  public getRoleMarkerMaterial(type: PieceSymbol): THREE.MeshStandardMaterial {
+    return this.roleMarkerMaterials[type];
+  }
+
+  public clearTrackedMarkers(): void {
+    this.markerMeshes.clear();
   }
 
   private syncMaterialQualityAndSkin(): void {
@@ -270,6 +349,38 @@ export class PieceAssetManager {
       this.materials[c].gold.needsUpdate = true;
       this.materials[c].steel.needsUpdate = true;
     }
+
+    // Role Marker PBR Material Tuning across Quality Tiers & Skins (restrained luxury enamel/gemstone, zero harsh bloom)
+    const isClassicSkin = this.currentSkin === 'classic';
+    for (const sym of ['k', 'q', 'b', 'n', 'r', 'p'] as PieceSymbol[]) {
+      const mat = this.roleMarkerMaterials[sym];
+      const baseHex = isClassicSkin ? CLASSIC_INLAY_HEX[sym] : ROLE_ACCENT_HEX[sym];
+      mat.color.set(baseHex);
+
+      if (isClassicSkin) {
+        // Classic Staunton: restrained satin luxury enamel inlay (zero emissive glow)
+        mat.emissive.set('#000000');
+        mat.emissiveIntensity = 0.0;
+        mat.roughness = isLow ? 0.62 : 0.34;
+        mat.metalness = isLow ? 0.12 : 0.20;
+        mat.envMapIntensity = isLow ? 0.0 : isMed ? 0.16 : 0.24;
+      } else if (isLow) {
+        // Low Graphics Mode: lightweight matte high-contrast role markers with zero reflection/bloom cost
+        mat.emissive.set(baseHex);
+        mat.emissiveIntensity = 0.08;
+        mat.roughness = 0.64;
+        mat.metalness = 0.14;
+        mat.envMapIntensity = 0.0;
+      } else {
+        // Medium / High Fantasy Skins: crisp faceted gemstone / cloisonné enamel finish
+        mat.emissive.set(baseHex);
+        mat.emissiveIntensity = isMed ? 0.12 : 0.16;
+        mat.roughness = isMed ? 0.26 : 0.20;
+        mat.metalness = sym === 'k' || sym === 'p' ? 0.38 : 0.28;
+        mat.envMapIntensity = isMed ? 0.24 : 0.40;
+      }
+      mat.needsUpdate = true;
+    }
   }
 
   /**
@@ -342,6 +453,7 @@ export class PieceAssetManager {
         let goldGeo: THREE.BufferGeometry | null = null;
         let steelGeo: THREE.BufferGeometry | null = null;
         let faceGeo: THREE.BufferGeometry | null = null;
+        let markerGeo: THREE.BufferGeometry | null = null;
 
         pieceNode.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
@@ -351,6 +463,7 @@ export class PieceAssetManager {
             else if (n === 'gold' || n.startsWith('gold_') || n.includes('_gold')) goldGeo = mesh.geometry;
             else if (n === 'steel' || n.startsWith('steel_') || n.includes('_steel')) steelGeo = mesh.geometry;
             else if (n === 'face' || n.startsWith('face_') || n.includes('_face')) faceGeo = mesh.geometry;
+            else if (n === 'marker' || n.startsWith('marker_') || n.includes('_marker')) markerGeo = mesh.geometry;
           }
         });
 
@@ -359,7 +472,8 @@ export class PieceAssetManager {
             body: bodyGeo,
             gold: goldGeo,
             steel: steelGeo,
-            face: faceGeo
+            face: faceGeo,
+            marker: markerGeo ?? getPieceGeometryParts(symbol, 'high', 'arcane_royalty').marker
           });
         }
       }
@@ -404,11 +518,11 @@ export class PieceAssetManager {
 
     if (this.quality === 'low') {
       // In Low Graphics Mode, exclusively use the lightweight low-segment mesh at all distances with shadows off
-      const lowGroup = this.buildMeshGroup(lowParts, matSet, false, 'lod1');
+      const lowGroup = this.buildMeshGroup(lowParts, matSet, type, false, 'lod1');
       lod.addLevel(lowGroup, 0);
     } else {
-      const highGroup = this.buildMeshGroup(highParts, matSet, castShadows, 'lod0');
-      const lowGroup = this.buildMeshGroup(lowParts, matSet, false, 'lod1');
+      const highGroup = this.buildMeshGroup(highParts, matSet, type, castShadows, 'lod0');
+      const lowGroup = this.buildMeshGroup(lowParts, matSet, type, false, 'lod1');
       lod.addLevel(highGroup, 0);
       lod.addLevel(lowGroup, 22);
     }
@@ -454,6 +568,7 @@ export class PieceAssetManager {
   private buildMeshGroup(
     parts: PieceMeshParts,
     matSet: FactionMaterialSet,
+    type: PieceSymbol,
     castShadows: boolean,
     levelName: string
   ): THREE.Group {
@@ -484,7 +599,16 @@ export class PieceAssetManager {
     faceMesh.receiveShadow = true;
     faceMesh.raycast = NOOP_RAYCAST;
 
-    group.add(bodyMesh, goldMesh, steelMesh, faceMesh);
+    const markerMesh = new THREE.Mesh(parts.marker, this.roleMarkerMaterials[type]);
+    markerMesh.name = 'marker';
+    markerMesh.visible = this.pieceMarkersVisible;
+    markerMesh.castShadow = false;
+    markerMesh.receiveShadow = true;
+    markerMesh.raycast = NOOP_RAYCAST;
+    markerMesh.userData.isRoleMarker = true;
+    this.markerMeshes.add(markerMesh);
+
+    group.add(bodyMesh, goldMesh, steelMesh, faceMesh, markerMesh);
     return group;
   }
 

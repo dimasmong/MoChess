@@ -49,6 +49,14 @@ function serializePiecesToGLB(pieceEntries) {
         metallicFactor: 0.02,
         roughnessFactor: 0.38
       }
+    },
+    {
+      name: 'RoleMarker',
+      pbrMetallicRoughness: {
+        baseColorFactor: [0.96, 0.76, 0.22, 1.0],
+        metallicFactor: 0.30,
+        roughnessFactor: 0.22
+      }
     }
   ];
 
@@ -105,7 +113,8 @@ function serializePiecesToGLB(pieceEntries) {
       { subName: 'body', geo: parts.body, matIdx: 0 },
       { subName: 'gold', geo: parts.gold, matIdx: 1 },
       { subName: 'steel', geo: parts.steel, matIdx: 2 },
-      { subName: 'face', geo: parts.face, matIdx: 3 }
+      { subName: 'face', geo: parts.face, matIdx: 3 },
+      { subName: 'marker', geo: parts.marker, matIdx: 4 }
     ];
 
     const childNodeIndices = [];
@@ -284,7 +293,8 @@ async function main() {
       (countIndices(parts.body) +
         countIndices(parts.gold) +
         countIndices(parts.steel) +
-        countIndices(parts.face)) /
+        countIndices(parts.face) +
+        countIndices(parts.marker)) /
       3;
     totalTriangles += tris;
 
